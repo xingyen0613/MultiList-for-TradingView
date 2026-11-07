@@ -1,10 +1,17 @@
-# Multi-Group Watchlist
+# MultiList for TradingView
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
 A Chrome side panel watchlist for people who chart on TradingView. Create as many groups as you want, and put the same symbol in as many groups as you want. Click a symbol to show it on your TradingView chart.
 
+<p>
+  <img src="docs/screenshot-all.png" alt="The side panel with groups of Taiwan, US, European and crypto symbols" width="340">
+  <img src="docs/screenshot-europe-dark.png" alt="The European stocks tab in dark mode" width="340">
+</p>
+
 This is an independent personal project. It is not affiliated with TradingView.
+
+The interface is in Traditional Chinese.
 
 ## Features
 

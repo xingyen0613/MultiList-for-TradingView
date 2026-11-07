@@ -1,8 +1,13 @@
-# 多分組觀察清單（Multi-Group Watchlist）
+# MultiList for TradingView
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
 這是給 TradingView 使用者的 Chrome 側邊欄觀察清單。你可以建立任意數量的分組，同一個代碼也可以放進多個分組。點選代碼，TradingView 圖表就會切換到該代碼。
+
+<p>
+  <img src="docs/screenshot-all.png" alt="側邊欄：台股、美股、歐股、加密貨幣的分組" width="340">
+  <img src="docs/screenshot-europe-dark.png" alt="深色模式的歐股分頁" width="340">
+</p>
 
 這是獨立的個人專案，與 TradingView 沒有關係。
 
