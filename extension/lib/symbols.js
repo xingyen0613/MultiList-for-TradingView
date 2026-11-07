@@ -28,11 +28,16 @@ const EUROPE = {
 };
 const EUROPE_EXCHANGES = new Set(Object.values(EUROPE).map((item) => item.exchange));
 
+// Returns the market that has a quote source, or null. A symbol of another exchange,
+// for example BYBIT:SUIUSDT, can be in a group and open the chart, but has no quote.
+// TradingView writes a Binance perpetual contract as BINANCE:SUIUSDT.P.
 export function marketOf(symbolId) {
-  const exchange = symbolId.split(':')[0];
+  const [exchange, ticker = ''] = symbolId.split(':');
   if (TAIWAN_EXCHANGES.has(exchange)) return 'tw';
+  if (US_EXCHANGES.has(exchange)) return 'us';
   if (EUROPE_EXCHANGES.has(exchange)) return 'eu';
-  return exchange === 'BINANCE' ? 'crypto' : 'us';
+  if (exchange === 'BINANCE') return ticker.endsWith('.P') ? 'perp' : 'crypto';
+  return null;
 }
 
 // IFX.DE becomes XETR:IFX. Returns null if the exchange is not supported.
@@ -59,12 +64,6 @@ export function tickerOf(symbolId) {
 export const toYahooTicker = (ticker) => ticker.replaceAll('.', '-');
 const fromYahooTicker = (ticker) => ticker.replaceAll('-', '.');
 
-function marketOfExchange(exchange) {
-  if (TAIWAN_EXCHANGES.has(exchange)) return 'tw';
-  if (US_EXCHANGES.has(exchange)) return 'us';
-  return exchange === 'BINANCE' ? 'crypto' : null;
-}
-
 // Returns the ticker and the markets to look it up in, or null if unsupported.
 // A European symbol also gets the Yahoo tickers to try. Without them, the lookup searches all of Europe.
 export function parseInput(raw) {
@@ -74,7 +73,7 @@ export function parseInput(raw) {
   if (fullForm) {
     const [, exchange, ticker] = fullForm;
     if (EUROPE_EXCHANGES.has(exchange)) return { ticker, markets: ['eu'], yahoo: europeTickersOf(exchange, ticker) };
-    const market = marketOfExchange(exchange);
+    const market = marketOf(text);
     return market ? { ticker, markets: [market] } : null;
   }
 

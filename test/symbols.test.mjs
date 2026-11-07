@@ -47,6 +47,16 @@ test('marketOf and tickerOf read a symbol id', () => {
   assert.equal(tickerOf('NYSE:BRK.B'), 'BRK.B');
 });
 
+test('marketOf gives Binance perpetual contracts their own market, and null for exchanges with no quotes', () => {
+  assert.equal(marketOf('BINANCE:SUIUSDT.P'), 'perp');
+  assert.equal(marketOf('CBOE:VIX'), 'us');
+  for (const id of ['BYBIT:SUIUSDT', 'COINBASE:SUIUSD', 'CME:SUI1!', 'TVC:DXY', 'FX:EURUSD', 'HKEX:700']) {
+    assert.equal(marketOf(id), null, id);
+  }
+  assert.deepEqual(parseInput('binance:suiusdt.p'), { ticker: 'SUIUSDT.P', markets: ['perp'] });
+  assert.equal(parseInput('BYBIT:SUIUSDT'), null);
+});
+
 test('europeIdOf turns a Yahoo ticker into the TradingView form', () => {
   assert.equal(europeIdOf('IFX.DE'), 'XETR:IFX');
   assert.equal(europeIdOf('IQE.L'), 'LSE:IQE');

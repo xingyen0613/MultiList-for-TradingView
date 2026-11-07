@@ -1,0 +1,498 @@
+{
+ "symbols_remaining": 0,
+ "symbols": [
+  {
+   "symbol": "<em>SUI</em>",
+   "description": "Market Cap <em>SUI</em>, $",
+   "type": "index",
+   "exchange": "CRYPTOCAP",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "tvc",
+   "source_logoid": "source/CRYPTOCAP",
+   "source2": {
+    "id": "CRYPTOCAP",
+    "name": "Crypto Market Capitalization",
+    "description": "Crypto Market Capitalization"
+   },
+   "source_id": "CRYPTOCAP",
+   "typespecs": [
+    "crypto",
+    "synthetic"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>",
+   "description": "Sun Communities, Inc.",
+   "type": "stock",
+   "exchange": "NYSE",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "cusip": "866674104",
+   "isin": "US8666741041",
+   "cik_code": "0000912593",
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "logoid": "sun-communities",
+   "logo": {
+    "style": "single",
+    "logoid": "sun-communities"
+   },
+   "provider_id": "ice",
+   "source_logoid": "source/NYSE",
+   "source2": {
+    "id": "NYSE",
+    "name": "New York Stock Exchange",
+    "description": "New York Stock Exchange"
+   },
+   "source_id": "NYSE",
+   "country": "US",
+   "is_primary_listing": true,
+   "typespecs": [
+    "common"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>",
+   "description": "Sekisui Chemical Co., Ltd.",
+   "type": "stock",
+   "exchange": "GETTEX",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "isin": "JP3419400001",
+   "currency_code": "EUR",
+   "currency-logoid": "country/EU",
+   "logoid": "sekisui-chemical",
+   "logo": {
+    "style": "single",
+    "logoid": "sekisui-chemical"
+   },
+   "provider_id": "sixgroup",
+   "source_logoid": "source/GETTEX",
+   "source2": {
+    "id": "GETTEX",
+    "name": "Gettex",
+    "description": "Gettex"
+   },
+   "source_id": "GETTEX",
+   "country": "DE",
+   "typespecs": [
+    "common"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>",
+   "description": "Market Cap <em>SUI</em>, $",
+   "type": "index",
+   "exchange": "CRYPTOCAP",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "tvc",
+   "source_logoid": "source/CRYPTOCAP",
+   "source2": {
+    "id": "CRYPTOCAP",
+    "name": "Crypto Market Capitalization",
+    "description": "Crypto Market Capitalization"
+   },
+   "source_id": "CRYPTOCAP",
+   "typespecs": [
+    "crypto",
+    "synthetic"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>",
+   "description": "<em>SUI</em> Futures",
+   "type": "futures",
+   "exchange": "COINBASE Derivatives",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "coinbasederivatives",
+   "source_logoid": "source/COINBASE",
+   "source2": {
+    "id": "COINBASE",
+    "name": "Coinbase",
+    "description": "Coinbase"
+   },
+   "source_id": "COINBASE",
+   "contracts": [
+    {
+     "symbol": "<em>SUI</em>X2026",
+     "source_logoid": "source/COINBASE",
+     "typespecs": [
+      "crypto"
+     ],
+     "description": "Nov 2026",
+     "prefix": "COINBASE"
+    },
+    {
+     "symbol": "<em>SUI</em>Z2026",
+     "source_logoid": "source/COINBASE",
+     "typespecs": [
+      "crypto"
+     ],
+     "description": "Dec 2026",
+     "prefix": "COINBASE"
+    },
+    {
+     "symbol": "<em>SUI</em>F2027",
+     "source_logoid": "source/COINBASE",
+     "typespecs": [
+      "crypto"
+     ],
+     "description": "Jan 2027",
+     "prefix": "COINBASE"
+    }
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>USDT",
+   "description": "<em>SUI</em> / TetherUS",
+   "type": "spot",
+   "exchange": "Binance",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "binance",
+   "source_logoid": "source/BINANCE",
+   "source2": {
+    "id": "BINANCE",
+    "name": "Binance",
+    "description": "Binance"
+   },
+   "source_id": "BINANCE",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "BINANCE"
+  },
+  {
+   "symbol": "<em>SUI</em>USD",
+   "description": "<em>SUI</em> / US Dollar",
+   "type": "spot",
+   "exchange": "Coinbase",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "coinbase",
+   "source_logoid": "source/COINBASE",
+   "source2": {
+    "id": "COINBASE",
+    "name": "Coinbase",
+    "description": "Coinbase"
+   },
+   "source_id": "COINBASE",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "COINBASE"
+  },
+  {
+   "symbol": "<em>SUI</em>USD",
+   "description": "<em>Sui</em>",
+   "type": "spot",
+   "exchange": "CRYPTO",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "tvc",
+   "source_logoid": "source/CRYPTO",
+   "source2": {
+    "id": "CRYPTO",
+    "name": "Crypto assets",
+    "description": "Crypto assets"
+   },
+   "source_id": "CRYPTO",
+   "typespecs": [
+    "crypto",
+    "cryptoasset",
+    "synthetic"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>USD",
+   "description": "<em>SUI</em> / US Dollar",
+   "type": "spot",
+   "exchange": "Binance",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "binance",
+   "source_logoid": "source/BINANCE",
+   "source2": {
+    "id": "BINANCE",
+    "name": "Binance",
+    "description": "Binance"
+   },
+   "source_id": "BINANCE",
+   "typespecs": [
+    "crypto",
+    "tv-calculated-pair",
+    "synthetic"
+   ],
+   "prefix": "BINANCE"
+  },
+  {
+   "symbol": "<em>SUI</em>USDT",
+   "description": "<em>Sui</em>/USDT",
+   "type": "spot",
+   "exchange": "OKX",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "okx",
+   "source_logoid": "source/OKX",
+   "source2": {
+    "id": "OKX",
+    "name": "OKX",
+    "description": "OKX"
+   },
+   "source_id": "OKX",
+   "typespecs": [
+    "crypto"
+   ]
+  },
+  {
+   "symbol": "<em>SUI</em>U",
+   "description": "<em>SUI</em> / U",
+   "type": "spot",
+   "exchange": "Binance",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "U",
+   "currency-logoid": "crypto/XTVCUNITED",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "binance",
+   "source_logoid": "source/BINANCE",
+   "source2": {
+    "id": "BINANCE",
+    "name": "Binance",
+    "description": "Binance"
+   },
+   "source_id": "BINANCE",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "BINANCE"
+  },
+  {
+   "symbol": "<em>SUI</em>USD",
+   "description": "<em>SUI</em> / U. S. Dollar",
+   "type": "spot",
+   "exchange": "Kraken",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USD",
+   "currency-logoid": "country/US",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "kraken",
+   "source_logoid": "source/KRAKEN",
+   "source2": {
+    "id": "KRAKEN",
+    "name": "Kraken",
+    "description": "Kraken"
+   },
+   "source_id": "KRAKEN",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "KRAKEN"
+  },
+  {
+   "symbol": "<em>SUI</em>USDT",
+   "description": "<em>SUI</em>USDT SPOT",
+   "type": "spot",
+   "exchange": "Bybit",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "bybit",
+   "source_logoid": "source/BYBIT",
+   "source2": {
+    "id": "BYBIT",
+    "name": "Bybit",
+    "description": "Bybit"
+   },
+   "source_id": "BYBIT",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "BYBIT"
+  },
+  {
+   "symbol": "<em>SUI</em>USDT.P",
+   "description": "<em>SUI</em> / TetherUS PERPETUAL CONTRACT",
+   "type": "swap",
+   "exchange": "Binance",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "binance",
+   "source_logoid": "source/BINANCE",
+   "source2": {
+    "id": "BINANCE",
+    "name": "Binance",
+    "description": "Binance"
+   },
+   "source_id": "BINANCE",
+   "typespecs": [
+    "crypto",
+    "perpetual"
+   ],
+   "prefix": "BINANCE"
+  },
+  {
+   "symbol": "<em>SUI</em>BTC",
+   "description": "<em>SUI</em> / Bitcoin",
+   "type": "spot",
+   "exchange": "Binance",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "BTC",
+   "currency-logoid": "crypto/XTVCBTC",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "binance",
+   "source_logoid": "source/BINANCE",
+   "source2": {
+    "id": "BINANCE",
+    "name": "Binance",
+    "description": "Binance"
+   },
+   "source_id": "BINANCE",
+   "typespecs": [
+    "crypto"
+   ],
+   "prefix": "BINANCE"
+  },
+  {
+   "symbol": "<em>SUI</em>USDT.P",
+   "description": "<em>SUI</em>USDT Perpetual Contract",
+   "type": "swap",
+   "exchange": "Bybit",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "bybit",
+   "source_logoid": "source/BYBIT",
+   "source2": {
+    "id": "BYBIT",
+    "name": "Bybit",
+    "description": "Bybit"
+   },
+   "source_id": "BYBIT",
+   "typespecs": [
+    "crypto",
+    "perpetual"
+   ],
+   "prefix": "BYBIT"
+  },
+  {
+   "symbol": "<em>SUI</em>USDT.P",
+   "description": "<em>SUI</em>USDT Perpetual Swap Contract",
+   "type": "swap",
+   "exchange": "OKX",
+   "found_by_isin": false,
+   "found_by_cusip": false,
+   "currency_code": "USDT",
+   "currency-logoid": "crypto/XTVCUSDT",
+   "base-currency-logoid": "crypto/XTVCSUI",
+   "logo": {
+    "style": "single",
+    "logoid": "crypto/XTVCSUI"
+   },
+   "provider_id": "okx",
+   "source_logoid": "source/OKX",
+   "source2": {
+    "id": "OKX",
+    "name": "OKX",
+    "description": "OKX"
+   },
+   "source_id": "OKX",
+   "typespecs": [
+    "crypto",
+    "perpetual"
+   ]
+  }
+ ]
+}

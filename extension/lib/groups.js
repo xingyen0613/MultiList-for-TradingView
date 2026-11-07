@@ -1,42 +1,22 @@
 // Pure operations on the list of groups. A symbol is unique inside one group,
 // but the same symbol can be in any number of groups.
 
-import { marketOf } from './symbols.js';
+// The all tab shows every group. A custom tab shows only its own groups.
+export const ALL_TAB = 'all';
 
-const MARKET_TABS = new Set(['all', 'tw', 'us', 'eu', 'crypto']);
-
-export const isMarketTab = (tabId) => MARKET_TABS.has(tabId);
-
-// A custom tab shows every market of its own groups.
-export const marketOfTab = (tabId) => (isMarketTab(tabId) ? tabId : 'all');
-
-// A market tab shows every group with symbols of its market. A custom tab shows only its own groups.
 export function groupInTab(group, tabId) {
-  return isMarketTab(tabId) ? groupVisibleIn(group, tabId) : group.tabId === tabId;
+  return tabId === ALL_TAB || group.tabId === tabId;
 }
 
-// A market tab holds no groups, so a drop there takes the group out of its custom tab.
+// The all tab holds no groups, so a drop there takes the group out of its custom tab.
 export function moveGroupToTab(group, tabId) {
-  if (isMarketTab(tabId)) delete group.tabId;
+  if (tabId === ALL_TAB) delete group.tabId;
   else group.tabId = tabId;
 }
 
-// Deleting a tab keeps its groups. They stay on the market tabs.
+// Deleting a tab keeps its groups. They stay on the all tab.
 export function releaseGroups(groups, tabId) {
   for (const group of groups) if (group.tabId === tabId) delete group.tabId;
-}
-
-export function inMarket(symbolId, market) {
-  return market === 'all' || marketOf(symbolId) === market;
-}
-
-export function symbolsInMarket(group, market) {
-  return group.symbols.filter((item) => inMarket(item.id, market));
-}
-
-// An empty group shows on every tab, or a new group has no place to get its first symbol.
-export function groupVisibleIn(group, market) {
-  return group.symbols.length === 0 || symbolsInMarket(group, market).length > 0;
 }
 
 export function createGroup(name) {
@@ -77,8 +57,7 @@ export function moveGroup(groups, groupId, beforeGroupId) {
 }
 
 // Only open groups on the current tab need quotes. A symbol in two open groups is fetched once.
-export function visibleSymbolIds(groups, tabId = 'all') {
-  const market = marketOfTab(tabId);
+export function visibleSymbolIds(groups, tabId = ALL_TAB) {
   const open = groups.filter((group) => !group.collapsed && groupInTab(group, tabId));
-  return [...new Set(open.flatMap((group) => symbolsInMarket(group, market).map((item) => item.id)))];
+  return [...new Set(open.flatMap((group) => group.symbols.map((item) => item.id)))];
 }

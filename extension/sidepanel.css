@@ -490,3 +490,139 @@ input {
 .hint {
   color: var(--muted);
 }
+
+.symbol-search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.search-type {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.search-type:hover {
+  background: var(--hover);
+}
+
+.search-type[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-results {
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  list-style: none;
+}
+
+.search-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.search-result:hover {
+  background: var(--hover);
+}
+
+.search-result.active {
+  background: var(--selected);
+}
+
+.result-ticker {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-meta {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.result-name {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.no-quote {
+  margin-right: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+  font-size: 10px;
+}
+
+.search-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.import-panel p {
+  margin: 0;
+}
+
+.import-panel .form-error {
+  padding: 0;
+}
+
+.import-title {
+  font-weight: 600;
+}
+
+.import-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.import-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -198,6 +198,18 @@ const fetchFugle = async (symbolIds, keys) => {
   return new Map(responses.flatMap((json) => [...parseFugle(json)]));
 };
 
+// Binance has no request for many perpetual contracts, so each contract is one request.
+const perpTicker = (symbolId) => tickerOf(symbolId).replace(/\.P$/, '');
+
+const fetchBinancePerp = async (symbolIds) => {
+  const results = await Promise.allSettled(
+    symbolIds.map((id) => fetchJson(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${perpTicker(id)}`)),
+  );
+  const rows = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
+  if (rows.length === 0) throw results[0].reason;
+  return parseBinance(rows);
+};
+
 // Each market tries its enabled sources in order, and uses the first that works.
 const SOURCES = {
   tw: [
@@ -210,6 +222,7 @@ const SOURCES = {
   ],
   eu: [yahooSource],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
+  perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
 };
 
 async function fetchMarket(market, symbolIds, keys, yahooOf) {
@@ -231,9 +244,15 @@ async function fetchMarket(market, symbolIds, keys, yahooOf) {
 
 // European symbols keep their Yahoo ticker, because EURONEXT:MC can be MC.PA or MC.AS.
 // yahooTickers maps those symbol ids to their Yahoo tickers.
+// A symbol with no market gets no quote. So does a European symbol without its Yahoo ticker,
+// because the bare ticker can be a US stock.
 export async function fetchQuotes(symbolIds, keys, yahooTickers = new Map()) {
   const yahooOf = (id) => yahooTickers.get(id) ?? toYahooTicker(tickerOf(id));
-  const byMarket = Map.groupBy(symbolIds, marketOf);
+  const quotable = (id) => {
+    const market = marketOf(id);
+    return market !== null && (market !== 'eu' || yahooTickers.has(id));
+  };
+  const byMarket = Map.groupBy(symbolIds.filter(quotable), marketOf);
   const results = await Promise.all(
     [...byMarket].map(([market, ids]) => fetchMarket(market, ids, keys, yahooOf)),
   );
@@ -251,6 +270,16 @@ async function resolveTaiwan(ticker) {
   const row = (json.msgArray ?? []).find((item) => item.c);
   if (!row) return null;
   return { id: `${row.ex === 'otc' ? 'TPEX' : 'TWSE'}:${row.c}`, name: row.n ?? '' };
+}
+
+async function resolvePerp(ticker) {
+  try {
+    const json = await fetchJson(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${ticker.replace(/\.P$/, '')}`);
+    return { id: `BINANCE:${json.symbol}.P`, name: '' };
+  } catch (error) {
+    if (error.status === 400) return null;
+    throw error;
+  }
 }
 
 async function resolveCrypto(ticker) {
@@ -306,7 +335,7 @@ async function resolveEurope(ticker, yahoo) {
   return { id: europeIdOf(match.symbol), name: cleanName(match.longname ?? match.shortname), yahoo: match.symbol };
 }
 
-const RESOLVERS = { tw: resolveTaiwan, crypto: resolveCrypto, us: resolveUs, eu: resolveEurope };
+const RESOLVERS = { tw: resolveTaiwan, crypto: resolveCrypto, perp: resolvePerp, us: resolveUs, eu: resolveEurope };
 
 export async function resolveSymbol(raw) {
   const parsed = parseInput(raw);

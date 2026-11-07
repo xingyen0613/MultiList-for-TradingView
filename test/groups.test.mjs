@@ -2,18 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   addSymbol,
+  ALL_TAB,
   createGroup,
   groupInTab,
-  groupVisibleIn,
-  inMarket,
-  isMarketTab,
-  marketOfTab,
   moveGroup,
   moveGroupToTab,
   moveSymbol,
   releaseGroups,
   removeSymbol,
-  symbolsInMarket,
   visibleSymbolIds,
 } from '../extension/lib/groups.js';
 
@@ -103,78 +99,43 @@ test('visibleSymbolIds skips closed groups and removes duplicates', () => {
   assert.deepEqual(visibleSymbolIds(groups), []);
 });
 
-test('inMarket matches the market of the symbol, and all matches every symbol', () => {
-  assert.equal(inMarket(TSMC.id, 'tw'), true);
-  assert.equal(inMarket('TPEX:6488', 'tw'), true);
-  assert.equal(inMarket(TSMC.id, 'us'), false);
-  assert.equal(inMarket(AAPL.id, 'us'), true);
-  assert.equal(inMarket(BTC.id, 'crypto'), true);
-  assert.equal(inMarket(IFX.id, 'eu'), true);
-  assert.equal(inMarket(IFX.id, 'us'), false);
-  for (const symbol of [TSMC, AAPL, BTC, IFX]) assert.equal(inMarket(symbol.id, 'all'), true);
-});
-
-test('symbolsInMarket keeps only the symbols of the market, in order', () => {
-  const group = createGroup('A');
-  group.symbols = [AAPL, TSMC, BTC, { id: 'TPEX:6488', name: '' }];
-  assert.deepEqual(symbolsInMarket(group, 'tw').map((item) => item.id), [TSMC.id, 'TPEX:6488']);
-  assert.deepEqual(symbolsInMarket(group, 'all'), group.symbols);
-});
-
-test('groupVisibleIn hides a group with only other markets and shows an empty group', () => {
-  const { a, b } = twoGroups();
-  assert.equal(groupVisibleIn(a, 'tw'), true);
-  assert.equal(groupVisibleIn(a, 'crypto'), false);
-  assert.equal(groupVisibleIn(b, 'crypto'), true);
-  assert.equal(groupVisibleIn(b, 'all'), true);
-  assert.equal(groupVisibleIn(createGroup('empty'), 'tw'), true);
-});
-
-test('visibleSymbolIds returns only the symbols of the current tab', () => {
-  const { a, b, groups } = twoGroups();
-  addSymbol(b, AAPL);
-  assert.deepEqual(visibleSymbolIds(groups, 'us'), [AAPL.id]);
-  assert.deepEqual(visibleSymbolIds(groups, 'tw'), [TSMC.id]);
-  assert.deepEqual(visibleSymbolIds(groups, 'crypto'), [BTC.id]);
-  a.collapsed = true;
-  assert.deepEqual(visibleSymbolIds(groups, 'tw'), []);
-});
-
-test('market tabs and custom tabs', () => {
-  for (const id of ['all', 'tw', 'us', 'eu', 'crypto']) assert.equal(isMarketTab(id), true);
-  assert.equal(isMarketTab('x1'), false);
-  assert.equal(marketOfTab('eu'), 'eu');
-  assert.equal(marketOfTab('x1'), 'all');
-});
-
-test('a custom tab shows only its own groups, with every market', () => {
+test('the all tab shows every group, and a custom tab shows only its own groups', () => {
   const { a, b } = twoGroups();
   a.tabId = 'x1';
   assert.equal(groupInTab(a, 'x1'), true);
   assert.equal(groupInTab(b, 'x1'), false);
   assert.equal(groupInTab(a, 'x2'), false);
-  // The market tabs still show the groups of a custom tab.
-  assert.equal(groupInTab(a, 'tw'), true);
-  assert.equal(groupInTab(a, 'all'), true);
-  assert.equal(groupInTab(a, 'crypto'), false);
+  assert.equal(groupInTab(a, ALL_TAB), true);
+  assert.equal(groupInTab(b, ALL_TAB), true);
 });
 
-test('visibleSymbolIds on a custom tab returns all markets of its groups only', () => {
+test('a tab shows the symbols of every market', () => {
+  const group = createGroup('A');
+  group.symbols = [TSMC, AAPL, IFX, BTC];
+  group.tabId = 'x1';
+  const all = [TSMC.id, AAPL.id, IFX.id, BTC.id];
+  assert.deepEqual(visibleSymbolIds([group], 'x1'), all);
+  assert.deepEqual(visibleSymbolIds([group], ALL_TAB), all);
+});
+
+test('visibleSymbolIds on a custom tab returns the symbols of its groups only', () => {
   const { a, b, groups } = twoGroups();
   a.tabId = 'x1';
   assert.deepEqual(visibleSymbolIds(groups, 'x1'), [AAPL.id, TSMC.id]);
   assert.deepEqual(visibleSymbolIds(groups, 'x2'), []);
   b.tabId = 'x1';
   assert.deepEqual(visibleSymbolIds(groups, 'x1'), [AAPL.id, TSMC.id, BTC.id]);
+  a.collapsed = true;
+  assert.deepEqual(visibleSymbolIds(groups, 'x1'), [BTC.id]);
 });
 
-test('moveGroupToTab moves a group into a custom tab, and a market tab takes it out', () => {
+test('moveGroupToTab moves a group into a custom tab, and the all tab takes it out', () => {
   const group = createGroup('A');
   moveGroupToTab(group, 'x1');
   assert.equal(group.tabId, 'x1');
   moveGroupToTab(group, 'x2');
   assert.equal(group.tabId, 'x2');
-  moveGroupToTab(group, 'us');
+  moveGroupToTab(group, ALL_TAB);
   assert.equal('tabId' in group, false);
 });
 
@@ -186,11 +147,4 @@ test('releaseGroups keeps the groups of a deleted tab and only those', () => {
   assert.equal('tabId' in a, false);
   assert.equal(b.tabId, 'x2');
   assert.equal(groups.length, 2);
-});
-
-test('a European symbol shows on the European tab', () => {
-  const group = createGroup('A');
-  group.symbols = [AAPL, IFX];
-  assert.deepEqual(visibleSymbolIds([group], 'eu'), [IFX.id]);
-  assert.deepEqual(visibleSymbolIds([group], 'us'), [AAPL.id]);
 });

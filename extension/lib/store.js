@@ -30,10 +30,30 @@ export async function saveGroups(groups) {
   if (stale.length > 0) await chrome.storage.sync.remove(stale);
 }
 
-// Market tabs have fixed ids and can have custom names. Custom tabs are a list of { id, name }.
+// Chrome measures a sync item as its key plus its value in JSON, in bytes.
+export const QUOTA_PER_ITEM = 8192;
+export const QUOTA_TOTAL = 102400;
+export const MAX_ITEMS = 512;
+const itemBytes = (key, value) => new TextEncoder().encode(key + JSON.stringify(value)).length;
+
+// Checks groups and tabs before a large change, so a save does not fail halfway.
+// Returns the first group that is too large for one item, the number of items and the total bytes.
+export function syncUsage(groups, { names, custom }) {
+  const items = { [ORDER_KEY]: groups.map((group) => group.id), [TAB_NAMES_KEY]: names, [CUSTOM_TABS_KEY]: custom };
+  for (const group of groups) items[GROUP_PREFIX + group.id] = group;
+  const count = Object.keys(items).length;
+  const total = Object.entries(items).reduce((sum, [key, value]) => sum + itemBytes(key, value), 0);
+  const tooLarge = groups.find((group) => itemBytes(GROUP_PREFIX + group.id, group) > QUOTA_PER_ITEM) ?? null;
+  const tooMany = count > MAX_ITEMS;
+  return { tooLarge, tooMany, items: count, total, fits: tooLarge === null && !tooMany && total <= QUOTA_TOTAL };
+}
+
+// The all tab can have a custom name. Custom tabs are a list of { id, name }.
+// A new install has one custom tab. Its id is fixed, so two computers that start at the same time
+// show the same tab.
 export async function loadTabs() {
   const data = await chrome.storage.sync.get([TAB_NAMES_KEY, CUSTOM_TABS_KEY]);
-  return { names: data[TAB_NAMES_KEY] ?? {}, custom: data[CUSTOM_TABS_KEY] ?? [] };
+  return { names: data[TAB_NAMES_KEY] ?? {}, custom: data[CUSTOM_TABS_KEY] ?? [{ id: 'tab1', name: '分頁1' }] };
 }
 
 export async function saveTabs({ names, custom }) {

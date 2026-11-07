@@ -184,6 +184,54 @@ test('one failing market does not stop the other markets', async () => {
   assert.deepEqual(us.errors, ['Yahoo: HTTP 500']);
 });
 
+test('fetchQuotes asks no source for symbols without a market or a European symbol without its Yahoo ticker', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    asked.push(url);
+    return jsonResponse({});
+  };
+  const { quotes, status } = await fetchQuotes(['BYBIT:SUIUSDT', 'CME:SUI1!', 'XETR:IFX'], {});
+  assert.deepEqual(asked, []);
+  assert.equal(quotes.size, 0);
+  assert.deepEqual(status, []);
+});
+
+test('fetchQuotes gets Binance perpetual contracts one at a time from the futures API', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { hostname, pathname, searchParams } = new URL(url);
+    asked.push(`${hostname}${pathname}?${searchParams}`);
+    const symbol = searchParams.get('symbol');
+    if (symbol === 'GONEUSDT') return jsonResponse({ code: -1121, msg: 'Invalid symbol.' }, 400);
+    return jsonResponse({ symbol, lastPrice: '2', priceChange: '0.1', priceChangePercent: '5.26' });
+  };
+  const { quotes, status } = await fetchQuotes(['BINANCE:SUIUSDT.P', 'BINANCE:GONEUSDT.P'], {});
+  assert.deepEqual(asked.sort(), [
+    'fapi.binance.com/fapi/v1/ticker/24hr?symbol=GONEUSDT',
+    'fapi.binance.com/fapi/v1/ticker/24hr?symbol=SUIUSDT',
+  ]);
+  assert.deepEqual([...quotes], [['BINANCE:SUIUSDT.P', { price: 2, change: 0.1, changePercent: 5.26 }]]);
+  assert.deepEqual(status, [{ market: 'perp', source: 'Binance', errors: [] }]);
+});
+
+test('Binance perpetual contracts report the error if every request fails', async () => {
+  globalThis.fetch = async () => jsonResponse({}, 451);
+  const { quotes, status } = await fetchQuotes(['BINANCE:SUIUSDT.P'], {});
+  assert.equal(quotes.size, 0);
+  assert.deepEqual(status, [{ market: 'perp', source: null, errors: ['Binance: HTTP 451'] }]);
+});
+
+test('resolveSymbol finds a Binance perpetual contract, and null for an unknown one', async () => {
+  globalThis.fetch = async (url) => {
+    const symbol = new URL(url).searchParams.get('symbol');
+    assert.equal(new URL(url).hostname, 'fapi.binance.com');
+    if (symbol === 'SUIUSDT') return jsonResponse({ symbol, price: '0.86' });
+    return jsonResponse({ code: -1121 }, 400);
+  };
+  assert.deepEqual(await resolveSymbol('BINANCE:SUIUSDT.P'), { id: 'BINANCE:SUIUSDT.P', name: '' });
+  await assert.rejects(resolveSymbol('BINANCE:GONEUSDT.P'), /找不到 GONEUSDT\.P/);
+});
+
 test('one unknown Binance pair does not stop the other pairs', async () => {
   const pairs = ['BTCUSDT', 'GONEUSDT', 'ETHUSDT'];
   globalThis.fetch = async (url) => {

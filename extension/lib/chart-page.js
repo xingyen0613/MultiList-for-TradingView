@@ -41,3 +41,33 @@ export async function switchSymbolInPage(symbolId) {
   // The search box closes when the page accepts the symbol. The chart data can come much later.
   return Boolean(await waitFor(() => !input.isConnected, 5000));
 }
+
+// Runs inside a TradingView tab, because TradingView search answers only requests from its own pages.
+// chrome.scripting copies only this function into the page.
+export async function searchSymbolsInPage(text, searchType) {
+  const url = new URL('https://symbol-search.tradingview.com/symbol_search/v3/');
+  const params = { text, hl: '1', exchange: '', lang: 'zh_TW', search_type: searchType, domain: 'production' };
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  try {
+    const response = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return { error: `HTTP ${response.status}` };
+    return { json: await response.json() };
+  } catch (error) {
+    return { error: error.name === 'TimeoutError' ? '逾時' : error.message };
+  }
+}
+
+// Runs inside a TradingView tab, so the request has the TradingView sign-in of the user.
+// The extension never sees the password or the cookie.
+export async function readWatchlistsInPage() {
+  try {
+    const response = await fetch(`${location.origin}/api/v1/symbols_list/custom/`, {
+      credentials: 'include',
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return { error: `HTTP ${response.status}` };
+    return { lists: await response.json() };
+  } catch (error) {
+    return { error: error.name === 'TimeoutError' ? '逾時' : error.message };
+  }
+}

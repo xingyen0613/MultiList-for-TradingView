@@ -10,6 +10,7 @@
     "https://mis.twse.com.tw/*",
     "https://query1.finance.yahoo.com/*",
     "https://data-api.binance.vision/*",
+    "https://fapi.binance.com/*",
     "https://api.fugle.tw/*",
     "https://data.alpaca.markets/*"
   ],
