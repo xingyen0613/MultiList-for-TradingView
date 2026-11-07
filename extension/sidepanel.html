@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>觀察清單</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>觀察清單</h1>
+      <div id="topbar-actions"></div>
+    </header>
+
+    <div class="columns" aria-hidden="true">
+      <span>代碼</span>
+      <span class="cell">最新價</span>
+      <span class="cell">漲跌</span>
+      <span class="cell">漲跌%</span>
+    </div>
+
+    <main id="groups"></main>
+
+    <footer class="statusbar">
+      <p id="status-error" class="status-error"></p>
+      <p id="status"></p>
+      <details id="settings">
+        <summary>API key 設定</summary>
+        <form id="keys-form">
+          <p class="hint">
+            沒有 key 時，台股用 TWSE MIS，美股用 Yahoo。Key 只存在這台電腦，不會同步。
+          </p>
+          <label>Fugle API key<input id="key-fugle" type="password" autocomplete="off" /></label>
+          <label>Alpaca Key ID<input id="key-alpaca-id" type="password" autocomplete="off" /></label>
+          <label>Alpaca Secret<input id="key-alpaca-secret" type="password" autocomplete="off" /></label>
+          <div class="form-actions">
+            <button type="submit" class="text-button primary">儲存</button>
+            <span id="keys-saved" class="hint" role="status"></span>
+          </div>
+        </form>
+      </details>
+    </footer>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
