@@ -1,22 +1,60 @@
 import { switchSymbolInPage } from './lib/chart-page.js';
+import { columnsTemplate, DEFAULT_WIDTHS, resizeColumns, validWidths } from './lib/columns.js';
 import { directionOf, formatChange, formatPercent, formatPrice, formatTime } from './lib/format.js';
-import { addSymbol, createGroup, moveGroup, moveSymbol, removeSymbol, visibleSymbolIds } from './lib/groups.js';
+import {
+  addSymbol,
+  createGroup,
+  groupInTab,
+  inMarket,
+  isMarketTab,
+  marketOfTab,
+  moveGroup,
+  moveGroupToTab,
+  moveSymbol,
+  releaseGroups,
+  removeSymbol,
+  symbolsInMarket,
+  visibleSymbolIds,
+} from './lib/groups.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
-import { loadGroups, loadKeys, saveGroups, saveKeys } from './lib/store.js';
+import {
+  loadColumnWidths,
+  loadCurrentTab,
+  loadGroups,
+  loadKeys,
+  loadTabs,
+  saveColumnWidths,
+  saveCurrentTab,
+  saveGroups,
+  saveKeys,
+  saveTabs,
+  tabsChanged,
+} from './lib/store.js';
 import { chartUrl, isChartUrl, tickerOf } from './lib/symbols.js';
 
 const REFRESH_MS = 30_000;
-const MARKET_LABELS = { tw: '台股', us: '美股', crypto: '加密貨幣' };
+const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', crypto: '加密貨幣' };
+const MARKET_TABS = { all: '全部', ...MARKET_LABELS };
 const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
 };
 
 const state = {
   groups: [],
+  tab: 'all',
+  tabNames: {},
+  customTabs: [],
+  editingTab: null,
+  creatingTab: false,
+  confirmingTabDelete: null,
+  tabSaving: 0,
+  tabEdits: 0,
+  columnWidths: DEFAULT_WIDTHS,
   quotes: new Map(),
   keys: {},
   selected: null,
@@ -141,14 +179,50 @@ function groupById(groupId) {
   return state.groups.find((group) => group.id === groupId);
 }
 
+// Renames, drags and closing a group need no new quotes, and Fugle has a low limit.
+function fetchNewQuotes() {
+  if (visibleSymbolIds(state.groups, state.tab).some((id) => !lastFetched.has(id))) refresh();
+}
+
 // Applies a change to the groups, then saves, redraws and fetches any new quotes.
 function commit(change = () => {}) {
   state.notice = '';
   change();
   render();
   persist();
-  // Renames, drags and closing a group need no new quotes, and Fugle has a low limit.
-  if (visibleSymbolIds(state.groups).some((id) => !lastFetched.has(id))) refresh();
+  fetchNewQuotes();
+}
+
+function allTabIds() {
+  return [...Object.keys(MARKET_TABS), ...state.customTabs.map((tab) => tab.id)];
+}
+
+function tabLabel(tabId) {
+  if (isMarketTab(tabId)) return state.tabNames[tabId] || MARKET_TABS[tabId];
+  return state.customTabs.find((tab) => tab.id === tabId)?.name ?? '';
+}
+
+const currentMarket = () => marketOfTab(state.tab);
+
+function clearTabEditing() {
+  state.editingTab = null;
+  state.creatingTab = false;
+  state.confirmingTabDelete = null;
+}
+
+function selectTab(tabId) {
+  // Another computer can delete a tab while its button is still on the screen.
+  if (!allTabIds().includes(tabId)) tabId = 'all';
+  clearEditing();
+  clearTabEditing();
+  state.tab = tabId;
+  state.notice = '';
+  saveCurrentTab(tabId);
+  renderTabs();
+  render();
+  groupsContainer.scrollTop = 0;
+  renderStatus();
+  fetchNewQuotes();
 }
 
 // A drop can remove the source row, and then Chrome may not send dragend.
@@ -213,11 +287,17 @@ async function addSymbols(groupId, text) {
 
   const group = groupById(groupId);
   if (!group) return;
+  const hidden = [];
   for (const symbol of added) {
     if (!addSymbol(group, symbol)) errors.push(`${tickerOf(symbol.id)} 已經在這個分組`);
+    else if (!inMarket(symbol.id, currentMarket())) hidden.push(tickerOf(symbol.id));
   }
   state.addError = errors.join('；');
   commit();
+  if (hidden.length > 0) {
+    state.notice = `${hidden.join('、')} 已加入，但不屬於「${tabLabel(state.tab)}」，請到對應市場的分頁查看`;
+    renderStatus();
+  }
 }
 
 // A reload loses indicators that are not saved, so the URL is only the fallback.
@@ -297,7 +377,7 @@ function paintRow(row) {
 }
 
 function clearDropMarks() {
-  for (const node of groupsContainer.querySelectorAll('.drop-before, .drop-after, .drop-into')) {
+  for (const node of document.querySelectorAll('.drop-before, .drop-after, .drop-into')) {
     node.classList.remove('drop-before', 'drop-after', 'drop-into');
   }
 }
@@ -417,11 +497,15 @@ function renderHeader(group, groupIndex) {
     });
   }
 
+  const shownCount = symbolsInMarket(group, currentMarket()).length;
+
   if (state.confirmingDelete === group.id) {
+    const hiddenCount = group.symbols.length - shownCount;
+    const warning = hiddenCount > 0 ? `其他市場的 ${hiddenCount} 檔也會一起刪除。` : '';
     return el(
       'div',
       { class: 'confirm' },
-      el('span', {}, `刪除「${group.name}」？`),
+      el('span', {}, `刪除「${group.name}」？${warning}`),
       el(
         'button',
         {
@@ -455,7 +539,7 @@ function renderHeader(group, groupIndex) {
       },
       svgIcon('chevron'),
       el('span', { class: 'group-name' }, group.name),
-      el('span', { class: 'group-count' }, String(group.symbols.length)),
+      el('span', { class: 'group-count' }, String(shownCount)),
     ),
     el(
       'span',
@@ -472,7 +556,10 @@ function renderHeader(group, groupIndex) {
 
 function renderBody(group) {
   if (group.collapsed) return [];
-  const nodes = group.symbols.map((symbol, index) => renderRow(group, symbol, index));
+  // The index is the place in the whole group, so a drop keeps the order of hidden symbols.
+  const nodes = group.symbols.flatMap((symbol, index) =>
+    inMarket(symbol.id, currentMarket()) ? [renderRow(group, symbol, index)] : [],
+  );
   if (group.symbols.length === 0 && state.addingTo !== group.id) {
     nodes.push(el('p', { class: 'group-empty' }, '這個分組還沒有代碼。按 + 新增。'));
   }
@@ -480,7 +567,7 @@ function renderBody(group) {
     nodes.push(
       textForm({
         label: `新增代碼到「${group.name}」`,
-        placeholder: '例如 2330、AAPL、BTCUSDT',
+        placeholder: '例如 2330、AAPL、IFX、BTCUSDT',
         onCancel: cancelEditing,
         onSubmit: (text) => addSymbols(group.id, text),
       }),
@@ -502,6 +589,7 @@ function render() {
         onSubmit: (name) =>
           commit(() => {
             const group = createGroup(name);
+            if (!isMarketTab(state.tab)) group.tabId = state.tab;
             state.groups.push(group);
             clearEditing();
             state.addingTo = group.id;
@@ -509,15 +597,24 @@ function render() {
       }),
     );
   }
-  if (state.groups.length === 0 && !state.creating) {
-    nodes.push(el('p', { class: 'empty' }, '還沒有分組。按右上角的 + 建立第一個分組。'));
-  }
   state.groups.forEach((group, index) => {
+    // The add form stays open after the group gets a symbol of another market.
+    if (!groupInTab(group, state.tab) && state.addingTo !== group.id) return;
     nodes.push(el('section', { class: 'group' }, renderHeader(group, index), ...renderBody(group)));
   });
+  if (nodes.length === 0) nodes.push(el('p', { class: 'empty' }, emptyText()));
   groupsContainer.replaceChildren(...nodes);
   groupsContainer.scrollTop = scrollTop;
   groupsContainer.querySelector('[data-autofocus]')?.focus();
+}
+
+function emptyText() {
+  if (state.groups.length === 0) return '還沒有分組。按右上角的 + 建立第一個分組。';
+  const label = tabLabel(state.tab);
+  if (!isMarketTab(state.tab)) {
+    return `「${label}」還沒有分組。按右上角的 + 建立分組，或把其他分頁的分組標題拖到這個分頁上。`;
+  }
+  return `「${label}」還沒有代碼。按右上角的 + 建立分組，或到「${tabLabel('all')}」分頁新增。`;
 }
 
 function renderStatus() {
@@ -540,6 +637,12 @@ let refreshAgain = false;
 let lastFetched = new Set();
 
 // Runs one fetch at a time. A request during a fetch runs again after that fetch ends.
+// European symbols keep the Yahoo ticker that the quotes need.
+function yahooTickers() {
+  const symbols = state.groups.flatMap((group) => group.symbols).filter((item) => item.yahoo);
+  return new Map(symbols.map((item) => [item.id, item.yahoo]));
+}
+
 async function refresh() {
   if (refreshing) {
     refreshAgain = true;
@@ -549,9 +652,9 @@ async function refresh() {
 
   refreshing = true;
   try {
-    const symbolIds = visibleSymbolIds(state.groups);
+    const symbolIds = visibleSymbolIds(state.groups, state.tab);
     lastFetched = new Set(symbolIds);
-    const { quotes, status } = await fetchQuotes(symbolIds, state.keys);
+    const { quotes, status } = await fetchQuotes(symbolIds, state.keys, yahooTickers());
     for (const [id, quote] of quotes) state.quotes.set(id, quote);
     state.sourceStatus = status;
     if (quotes.size > 0) state.updatedAt = new Date();
@@ -570,6 +673,300 @@ function setUpTopbar() {
   document
     .getElementById('topbar-actions')
     .append(iconButton('plus', '新增分組', () => startEditing('creating', true)));
+}
+
+// The counters work like the ones for groups: a sync does not replace tabs that are not saved yet.
+function persistTabs() {
+  state.tabSaving += 1;
+  state.tabEdits += 1;
+  saveTabs({ names: state.tabNames, custom: state.customTabs })
+    .catch((error) => {
+      state.saveError = `儲存失敗：${error.message}`;
+      renderStatus();
+    })
+    .finally(() => {
+      state.tabSaving -= 1;
+      if (state.tabSaving === 0) syncTabs();
+    });
+}
+
+async function syncTabs() {
+  if (state.tabSaving > 0) return;
+  const { tabEdits } = state;
+  const tabs = await loadTabs();
+  if (tabEdits !== state.tabEdits) return;
+  if (JSON.stringify(tabs) === JSON.stringify({ names: state.tabNames, custom: state.customTabs })) return;
+  const before = state.tab;
+  applyTabs(tabs);
+  // A redraw during a rename would lose the text that the user is typing.
+  if (!state.editingTab && !state.creatingTab) renderTabs();
+  render();
+  if (state.tab !== before) {
+    saveCurrentTab(state.tab);
+    fetchNewQuotes();
+  }
+}
+
+function stopTabEditing() {
+  clearTabEditing();
+  renderTabs();
+}
+
+// An empty name, or the default name, goes back to the default name of a market tab.
+// A custom tab keeps its old name if the new name is empty.
+function renameTab(tabId, name) {
+  state.editingTab = null;
+  if (isMarketTab(tabId)) {
+    if (name && name !== MARKET_TABS[tabId]) state.tabNames[tabId] = name;
+    else delete state.tabNames[tabId];
+  } else if (name) {
+    const tab = state.customTabs.find((item) => item.id === tabId);
+    if (tab) tab.name = name;
+  }
+  persistTabs();
+  renderTabs();
+  render();
+}
+
+function createTab(name) {
+  const tab = { id: crypto.randomUUID().slice(0, 8), name };
+  state.customTabs.push(tab);
+  persistTabs();
+  selectTab(tab.id);
+}
+
+function deleteTab(tabId) {
+  state.customTabs = state.customTabs.filter((tab) => tab.id !== tabId);
+  persistTabs();
+  releaseGroups(state.groups, tabId);
+  persist();
+  selectTab('all');
+}
+
+function tabNameField({ value, placeholder, label, onSubmit, onCancel }) {
+  const input = el('input', {
+    type: 'text',
+    class: 'tab-input',
+    value,
+    placeholder,
+    maxLength: 10,
+    'aria-label': label,
+    autocomplete: 'off',
+    spellcheck: false,
+    onkeydown: (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        onSubmit(input.value.trim());
+      } else if (event.key === 'Escape') {
+        onCancel();
+      }
+    },
+  });
+  return [input, iconButton('check', '儲存名稱', () => onSubmit(input.value.trim()), 'tab-save')];
+}
+
+function tabEditor(tabId) {
+  const parts = tabNameField({
+    value: tabLabel(tabId),
+    placeholder: MARKET_TABS[tabId] ?? '分頁名稱',
+    label: isMarketTab(tabId)
+      ? `「${tabLabel(tabId)}」分頁名稱，清空可還原預設`
+      : `「${tabLabel(tabId)}」分頁名稱`,
+    onSubmit: (name) => renameTab(tabId, name),
+    onCancel: stopTabEditing,
+  });
+  if (!isMarketTab(tabId)) {
+    parts.push(
+      iconButton(
+        'trash',
+        `刪除「${tabLabel(tabId)}」分頁`,
+        () => {
+          state.editingTab = null;
+          state.confirmingTabDelete = tabId;
+          renderTabs();
+        },
+        'tab-delete',
+      ),
+    );
+  }
+  return el('span', { class: 'tab-current' }, ...parts);
+}
+
+function tabDeleteConfirm(tabId) {
+  const count = state.groups.filter((group) => group.tabId === tabId).length;
+  const keep = count > 0 ? `裡面的 ${count} 個分組會留在「${tabLabel('all')}」。` : '';
+  return el(
+    'div',
+    { class: 'confirm' },
+    el('span', {}, `刪除「${tabLabel(tabId)}」分頁？${keep}`),
+    el('button', { type: 'button', class: 'text-button danger', onclick: () => deleteTab(tabId) }, '刪除'),
+    el('button', { type: 'button', class: 'text-button', onclick: stopTabEditing }, '取消'),
+  );
+}
+
+// Drop a group header on a tab to move the group there.
+function makeTabDropTarget(button, tabId) {
+  button.addEventListener('dragover', (event) => {
+    if (state.drag?.kind === 'group') markDrop(event, button, 'drop-into');
+  });
+  button.addEventListener('dragleave', () => button.classList.remove('drop-into'));
+  button.addEventListener('drop', (event) => {
+    if (state.drag?.kind !== 'group') return;
+    event.preventDefault();
+    clearDropMarks();
+    const group = groupById(takeDrag().groupId);
+    const target = isMarketTab(tabId) ? undefined : tabId;
+    if (!group || group.tabId === target || !allTabIds().includes(tabId)) return;
+    const from = group.tabId;
+    commit(() => moveGroupToTab(group, tabId));
+    state.notice = target
+      ? `「${group.name}」已移到「${tabLabel(tabId)}」`
+      : `「${group.name}」已移出「${tabLabel(from) || '自訂分頁'}」`;
+    renderStatus();
+  });
+}
+
+function tabButton(tabId) {
+  const button = el(
+    'button',
+    {
+      type: 'button',
+      class: 'tab',
+      'aria-pressed': String(tabId === state.tab),
+      dataset: { tab: tabId },
+      onclick: () => selectTab(tabId),
+    },
+    tabLabel(tabId),
+  );
+  makeTabDropTarget(button, tabId);
+  return button;
+}
+
+// The pencil and the + stay at the right end, so a tab click never moves the tabs.
+function tabActions() {
+  return el(
+    'div',
+    { class: 'tab-actions' },
+    iconButton(
+      'edit',
+      `重新命名「${tabLabel(state.tab)}」分頁`,
+      () => {
+        clearTabEditing();
+        state.editingTab = state.tab;
+        renderTabs();
+      },
+      'tab-edit',
+    ),
+    iconButton(
+      'plus',
+      '新增分頁',
+      () => {
+        clearTabEditing();
+        state.creatingTab = true;
+        renderTabs();
+      },
+      'tab-add',
+    ),
+  );
+}
+
+function renderTabs() {
+  const nav = document.getElementById('market-tabs');
+  if (state.confirmingTabDelete) {
+    nav.replaceChildren(tabDeleteConfirm(state.confirmingTabDelete));
+    return;
+  }
+  const items = allTabIds().map((id) => (state.editingTab === id ? tabEditor(id) : tabButton(id)));
+  if (state.creatingTab) {
+    items.push(
+      el(
+        'span',
+        { class: 'tab-current' },
+        ...tabNameField({
+          value: '',
+          placeholder: '新分頁名稱',
+          label: '新分頁名稱',
+          onSubmit: (name) => (name ? createTab(name) : stopTabEditing()),
+          onCancel: stopTabEditing,
+        }),
+      ),
+    );
+  }
+  nav.replaceChildren(el('div', { class: 'tab-list' }, ...items), tabActions());
+  const input = nav.querySelector('input');
+  input?.focus();
+  input?.select();
+  (input ?? nav.querySelector('.tab[aria-pressed="true"]'))?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+// Another computer can delete the current tab, or the tab that is open for editing.
+function applyTabs({ names, custom }) {
+  state.tabNames = names;
+  state.customTabs = custom;
+  const ids = allTabIds();
+  if (!ids.includes(state.tab)) state.tab = 'all';
+  if (!ids.includes(state.editingTab)) state.editingTab = null;
+  if (!ids.includes(state.confirmingTabDelete)) state.confirmingTabDelete = null;
+}
+
+function applyColumnWidths(widths) {
+  state.columnWidths = widths;
+  document.documentElement.style.setProperty('--columns', columnsTemplate(widths));
+}
+
+// The width of the widest number in each column on the screen.
+function numberWidths() {
+  const range = document.createRange();
+  return ['price', 'change', 'percent'].map((name) => {
+    let widest = 0;
+    for (const cell of groupsContainer.querySelectorAll(`.row .${name}`)) {
+      range.selectNodeContents(cell);
+      widest = Math.max(widest, Math.ceil(range.getBoundingClientRect().width));
+    }
+    return widest;
+  });
+}
+
+// Each number column header has a line on its left. Drag the line to move it.
+// Double-click a line to go back to the default widths.
+function setUpColumns(saved) {
+  applyColumnWidths(validWidths(saved) ? saved : DEFAULT_WIDTHS);
+  const header = document.querySelector('.columns');
+  const symbolHeader = header.firstElementChild;
+  header.querySelectorAll('.cell').forEach((cell, index) => {
+    const handle = el('span', { class: 'col-resize', title: '拖曳調整欄寬，按兩下還原預設' });
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      handle.setPointerCapture(event.pointerId);
+      const start = {
+        x: event.clientX,
+        widths: state.columnWidths,
+        symbol: symbolHeader.getBoundingClientRect().width,
+        mins: numberWidths(),
+      };
+      document.body.classList.add('resizing-columns');
+      handle.classList.add('dragging');
+      const move = (moveEvent) =>
+        applyColumnWidths(resizeColumns(start.widths, index, moveEvent.clientX - start.x, start.symbol, start.mins));
+      const end = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', end);
+        handle.removeEventListener('pointercancel', end);
+        document.body.classList.remove('resizing-columns');
+        handle.classList.remove('dragging');
+        if (state.columnWidths !== start.widths) saveColumnWidths(state.columnWidths);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    });
+    handle.addEventListener('dblclick', () => {
+      applyColumnWidths(DEFAULT_WIDTHS);
+      saveColumnWidths(DEFAULT_WIDTHS);
+    });
+    cell.append(handle);
+  });
 }
 
 function setUpKeysForm() {
@@ -594,14 +991,27 @@ function setUpKeysForm() {
 }
 
 function watchStorage() {
-  chrome.storage.onChanged.addListener((_changes, area) => {
-    if (area === 'sync') syncFromStorage();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+    if (tabsChanged(changes)) syncTabs();
+    syncFromStorage();
   });
 }
 
 async function start() {
-  [state.groups, state.keys] = await Promise.all([loadGroups(), loadKeys()]);
+  let tabs;
+  let widths;
+  [state.groups, state.keys, state.tab, tabs, widths] = await Promise.all([
+    loadGroups(),
+    loadKeys(),
+    loadCurrentTab(),
+    loadTabs(),
+    loadColumnWidths(),
+  ]);
+  applyTabs(tabs);
+  setUpColumns(widths);
   setUpTopbar();
+  renderTabs();
   setUpKeysForm();
   watchStorage();
   render();

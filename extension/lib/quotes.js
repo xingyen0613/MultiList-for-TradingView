@@ -1,8 +1,9 @@
-import { fromYahooTicker, marketOf, parseInput, tickerOf, toYahooTicker } from './symbols.js';
+import { europeIdOf, marketOf, parseInput, tickerOf, toYahooTicker } from './symbols.js';
 
 const TIMEOUT_MS = 10_000;
 const MIS_CHUNK = 100; // Tested: one request returns 100 symbols.
 const YAHOO_CHUNK = 20; // Tested: 21 symbols returns HTTP 400.
+const YAHOO = 'https://query1.finance.yahoo.com';
 const ALPACA_CHUNK = 100; // The Alpaca docs do not state a limit.
 const FUGLE_PER_CYCLE = 25; // Free plan: 60 calls per minute, and a cycle is 30 seconds.
 
@@ -65,12 +66,13 @@ export function parseMis(json) {
   return quotes;
 }
 
+// The keys stay in the Yahoo form, for example BRK-B and VOLV-B.ST.
 export function parseYahooSpark(json) {
   const quotes = new Map();
   for (const [yahooTicker, row] of Object.entries(json)) {
     const price = toNumber(row.fulldayPrice);
     if (price === null) continue;
-    quotes.set(fromYahooTicker(yahooTicker), {
+    quotes.set(yahooTicker, {
       price,
       change: toNumber(row.fulldayChange),
       changePercent: toNumber(row.fulldayChangePercent),
@@ -141,15 +143,17 @@ function misUrl(channels) {
 const fetchMis = (symbolIds) =>
   fetchChunks(symbolIds, MIS_CHUNK, (part) => ({ url: misUrl(part.map(misChannel)) }), parseMis);
 
-const fetchYahoo = (symbolIds) =>
+const fetchYahoo = (symbolIds, keys, yahooOf) =>
   fetchChunks(
-    symbolIds.map((id) => toYahooTicker(tickerOf(id))),
+    symbolIds.map(yahooOf),
     YAHOO_CHUNK,
     (part) => ({
-      url: `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${encodeURIComponent(part.join(','))}&range=1d&interval=1h`,
+      url: `${YAHOO}/v8/finance/spark?symbols=${encodeURIComponent(part.join(','))}&range=1d&interval=1h`,
     }),
     parseYahooSpark,
   );
+
+const yahooSource = { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo, keyOf: (id, yahooOf) => yahooOf(id) };
 
 function binanceUrl(tickers) {
   const query = encodeURIComponent(JSON.stringify(tickers));
@@ -202,19 +206,21 @@ const SOURCES = {
   ],
   us: [
     { label: 'Alpaca', enabled: (keys) => Boolean(keys.alpacaId && keys.alpacaSecret), fetch: fetchAlpaca },
-    { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo },
+    yahooSource,
   ],
+  eu: [yahooSource],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
 };
 
-async function fetchMarket(market, symbolIds, keys) {
+async function fetchMarket(market, symbolIds, keys, yahooOf) {
   const errors = [];
   for (const source of SOURCES[market].filter((item) => item.enabled(keys))) {
     try {
-      const byTicker = await source.fetch(symbolIds, keys);
+      const byTicker = await source.fetch(symbolIds, keys, yahooOf);
+      const keyOf = source.keyOf ? (id) => source.keyOf(id, yahooOf) : tickerOf;
       const quotes = symbolIds
-        .filter((id) => byTicker.has(tickerOf(id)))
-        .map((id) => [id, byTicker.get(tickerOf(id))]);
+        .filter((id) => byTicker.has(keyOf(id)))
+        .map((id) => [id, byTicker.get(keyOf(id))]);
       return { market, quotes, source: source.label, errors };
     } catch (error) {
       errors.push(`${source.label}: ${error.message}`);
@@ -223,10 +229,13 @@ async function fetchMarket(market, symbolIds, keys) {
   return { market, quotes: [], source: null, errors };
 }
 
-export async function fetchQuotes(symbolIds, keys) {
+// European symbols keep their Yahoo ticker, because EURONEXT:MC can be MC.PA or MC.AS.
+// yahooTickers maps those symbol ids to their Yahoo tickers.
+export async function fetchQuotes(symbolIds, keys, yahooTickers = new Map()) {
+  const yahooOf = (id) => yahooTickers.get(id) ?? toYahooTicker(tickerOf(id));
   const byMarket = Map.groupBy(symbolIds, marketOf);
   const results = await Promise.all(
-    [...byMarket].map(([market, ids]) => fetchMarket(market, ids, keys)),
+    [...byMarket].map(([market, ids]) => fetchMarket(market, ids, keys, yahooOf)),
   );
   return {
     quotes: new Map(results.flatMap((result) => result.quotes)),
@@ -235,6 +244,7 @@ export async function fetchQuotes(symbolIds, keys) {
 }
 
 // Resolvers return { id, name }, or null if the ticker does not exist.
+// A European symbol also has its Yahoo ticker, for example { id: 'XETR:IFX', name, yahoo: 'IFX.DE' }.
 
 async function resolveTaiwan(ticker) {
   const json = await fetchJson(misUrl([`tse_${ticker}.tw`, `otc_${ticker}.tw`]));
@@ -253,30 +263,57 @@ async function resolveCrypto(ticker) {
   }
 }
 
-async function resolveUs(ticker) {
+// Returns null for an unknown ticker. Yahoo also keeps old tickers with no price, for example IQE on NASDAQ.
+async function yahooMeta(yahooTicker) {
   try {
-    const yahooTicker = encodeURIComponent(toYahooTicker(ticker));
-    const json = await fetchJson(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooTicker}?range=1d&interval=1d`,
-    );
+    const json = await fetchJson(`${YAHOO}/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=1d&interval=1d`);
     const meta = json.chart.result[0].meta;
-    const exchange = YAHOO_EXCHANGES[meta.exchangeName];
-    if (!exchange) return null;
-    return { id: `${exchange}:${ticker}`, name: meta.shortName ?? meta.longName ?? '' };
+    return toNumber(meta.regularMarketPrice) === null ? null : meta;
   } catch (error) {
     if (error.status === 404) return null;
     throw error;
   }
 }
 
-const RESOLVERS = { tw: resolveTaiwan, crypto: resolveCrypto, us: resolveUs };
+// Yahoo pads some names, for example "INFINEON TECHNOLOGIES AG      N".
+const cleanName = (name) => (name ?? '').replace(/\s+/g, ' ').trim();
+
+async function resolveUs(ticker) {
+  const meta = await yahooMeta(toYahooTicker(ticker));
+  const exchange = YAHOO_EXCHANGES[meta?.exchangeName];
+  if (!exchange) return null;
+  return { id: `${exchange}:${ticker}`, name: meta.shortName ?? meta.longName ?? '' };
+}
+
+// Tries the given Yahoo tickers in order. Without them, takes the first European match of a Yahoo search.
+// Tested: the search lists the main exchange first, for example IFX.DE before IFX.F.
+async function resolveEurope(ticker, yahoo) {
+  for (const yahooTicker of yahoo ?? []) {
+    const meta = await yahooMeta(yahooTicker);
+    if (meta) return { id: europeIdOf(yahooTicker), name: cleanName(meta.longName ?? meta.shortName), yahoo: yahooTicker };
+  }
+  if (yahoo) return null;
+
+  const json = await fetchJson(`${YAHOO}/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=10&newsCount=0`);
+  const base = toYahooTicker(ticker);
+  const match = (json.quotes ?? []).find(
+    (quote) =>
+      ['EQUITY', 'ETF'].includes(quote.quoteType) &&
+      europeIdOf(quote.symbol ?? '') &&
+      quote.symbol.slice(0, quote.symbol.lastIndexOf('.')) === base,
+  );
+  if (!match) return null;
+  return { id: europeIdOf(match.symbol), name: cleanName(match.longname ?? match.shortname), yahoo: match.symbol };
+}
+
+const RESOLVERS = { tw: resolveTaiwan, crypto: resolveCrypto, us: resolveUs, eu: resolveEurope };
 
 export async function resolveSymbol(raw) {
   const parsed = parseInput(raw);
-  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股或幣安代碼`);
+  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股或幣安代碼`);
   try {
     for (const market of parsed.markets) {
-      const symbol = await RESOLVERS[market](parsed.ticker);
+      const symbol = await RESOLVERS[market](parsed.ticker, parsed.yahoo);
       if (symbol) return symbol;
     }
   } catch (error) {

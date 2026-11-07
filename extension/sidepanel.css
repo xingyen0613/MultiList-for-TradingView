@@ -68,6 +68,122 @@ input {
   font-weight: 600;
 }
 
+.tabs {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-list {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.tab {
+  padding: 4px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-pressed="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.tab-input {
+  width: 7em;
+  margin: 1px 0;
+  padding: 3px 5px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.tab-current {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+}
+
+.tabs .icon-button {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.tabs .icon-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tab-save {
+  color: var(--accent);
+}
+
+.tabs .confirm {
+  flex: 1;
+  padding: 2px 4px;
+}
+
+.columns .cell {
+  position: relative;
+}
+
+/* The line sits in the 4px gap on the left of a number column. */
+.col-resize {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: -6px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.col-resize::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
+
+.col-resize:hover::after,
+.col-resize.dragging::after {
+  background: var(--accent);
+}
+
+.resizing-columns,
+.resizing-columns * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
 .columns,
 .row {
   display: grid;
@@ -78,6 +194,7 @@ input {
 }
 
 .columns {
+  padding-top: 4px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
   color: var(--muted);

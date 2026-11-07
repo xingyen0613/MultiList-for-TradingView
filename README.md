@@ -9,11 +9,16 @@ This is an independent personal project. It is not affiliated with TradingView.
 ## Features
 
 - Unlimited groups. A symbol can be in many groups.
-- Taiwan stocks (TWSE, TPEx), US stocks and Binance pairs.
-- Last price, change and change percent. Open groups refresh every 30 seconds.
+- Taiwan stocks (TWSE, TPEx), US stocks, European stocks and Binance pairs.
+- Tabs for all symbols, Taiwan stocks, US stocks, European stocks and crypto. Each symbol goes to its market tab automatically.
+- Add your own tabs with the **+** at the right end of the tab bar. A new tab holds its own groups. Its groups also show on **All** and on the market tabs.
+- Click the pencil at the right end of the tab bar to rename the current tab. Clear the name of a market tab to go back to the default. A custom tab also has a delete button while you edit it. Its groups stay on **All**.
+- Drag a group header onto a tab to move the group there. Drop it on a market tab to take it out of its custom tab.
+- Drag the lines in the column header to change the column widths. A column cannot get narrower than its widest number. Double-click a line to go back to the default widths. Widths stay on this computer.
+- Last price, change and change percent. Open groups on the current tab refresh every 30 seconds.
 - Click a row to switch the chart in your TradingView tab.
 - Drag to reorder symbols and groups, or to move a symbol to another group.
-- Groups sync through your Chrome account. No server is needed.
+- Groups and tabs sync through your Chrome account. No server is needed.
 
 ## Install
 
@@ -28,11 +33,30 @@ The extension needs Chrome 117 or later.
 ## Use
 
 1. Click **+** at the top of the panel to create a group.
-2. Type symbols and press Enter. You can type several at once, for example `2330 AAPL BTCUSDT`.
+2. Type symbols and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`.
 3. Click a row to open it on the chart.
 4. Press Esc to close the input box.
 
-Numeric codes are looked up as Taiwan stocks. You can also type the full form, for example `NYSE:TSM`. Indices, futures and forex are not supported.
+Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM` or `XETR:IFX`. Indices, futures and forex are not supported.
+
+For a European stock that has the same ticker as a US stock, type the exchange. Use the TradingView form, for example `XETR:SAP`, or the Yahoo form, for example `SAP.DE`.
+
+Supported European exchanges:
+
+| Exchange | TradingView | Yahoo |
+| --- | --- | --- |
+| Xetra | `XETR:IFX` | `IFX.DE` |
+| London | `LSE:IQE` | `IQE.L` |
+| Euronext (Paris, Amsterdam, Brussels, Lisbon, Dublin) | `EURONEXT:ASML` | `ASML.AS` |
+| Milan | `MIL:ENEL` | `ENEL.MI` |
+| Madrid | `BME:SAN` | `SAN.MC` |
+| SIX Swiss | `SIX:NESN` | `NESN.SW` |
+| Stockholm | `OMXSTO:SIVE` | `SIVE.ST` |
+| Copenhagen | `OMXCOP:NOVO_B` | `NOVO-B.CO` |
+| Helsinki | `OMXHEX:NOKIA` | `NOKIA.HE` |
+| Oslo | `OSL:EQNR` | `EQNR.OL` |
+| Vienna | `VIE:OMV` | `OMV.VI` |
+| Warsaw | `GPW:PKO` | `PKO.WA` |
 
 ## Data sources
 
@@ -40,11 +64,12 @@ Numeric codes are looked up as Taiwan stocks. You can also type the full form, f
 | --- | --- | --- |
 | Taiwan stocks | [Fugle](https://developer.fugle.tw/docs/pricing) | TWSE MIS |
 | US stocks | [Alpaca](https://docs.alpaca.markets/docs/about-market-data-api) (IEX only) | Yahoo Finance |
+| European stocks | Not available | Yahoo Finance |
 | Crypto | Not needed | Binance |
 
 Add keys under **API key settings** at the bottom of the panel. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
 
-TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. Adding a new US or Taiwan symbol always uses Yahoo or TWSE MIS to find its exchange and name.
+TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. Adding a new US, European or Taiwan symbol always uses Yahoo or TWSE MIS to find its exchange and name.
 
 ## Limits
 

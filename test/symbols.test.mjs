@@ -1,16 +1,32 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chartUrl, isChartUrl, marketOf, parseInput, tickerOf } from '../extension/lib/symbols.js';
+import { chartUrl, europeIdOf, isChartUrl, marketOf, parseInput, tickerOf } from '../extension/lib/symbols.js';
 
 test('parseInput routes each input form to the right markets', () => {
   assert.deepEqual(parseInput('2330'), { ticker: '2330', markets: ['tw'] });
   assert.deepEqual(parseInput('00631l'), { ticker: '00631L', markets: ['tw'] });
-  assert.deepEqual(parseInput(' aapl '), { ticker: 'AAPL', markets: ['us'] });
-  assert.deepEqual(parseInput('BRK-B'), { ticker: 'BRK.B', markets: ['us'] });
+  assert.deepEqual(parseInput(' aapl '), { ticker: 'AAPL', markets: ['us', 'eu'] });
+  assert.deepEqual(parseInput('BRK-B'), { ticker: 'BRK.B', markets: ['us', 'eu'] });
+  assert.deepEqual(parseInput('BRK.B'), { ticker: 'BRK.B', markets: ['us', 'eu'] });
   assert.deepEqual(parseInput('btcusdt'), { ticker: 'BTCUSDT', markets: ['crypto', 'us'] });
   assert.deepEqual(parseInput('TWSE:2330'), { ticker: '2330', markets: ['tw'] });
   assert.deepEqual(parseInput('NYSE:TSM'), { ticker: 'TSM', markets: ['us'] });
   assert.deepEqual(parseInput('BINANCE:ETHUSDT'), { ticker: 'ETHUSDT', markets: ['crypto'] });
+});
+
+test('parseInput reads the European forms', () => {
+  assert.deepEqual(parseInput('ifx'), { ticker: 'IFX', markets: ['us', 'eu'] });
+  assert.deepEqual(parseInput('IFX.DE'), { ticker: 'IFX.DE', markets: ['eu'], yahoo: ['IFX.DE'] });
+  assert.deepEqual(parseInput('volv-b.st'), { ticker: 'VOLV-B.ST', markets: ['eu'], yahoo: ['VOLV-B.ST'] });
+  assert.deepEqual(parseInput('1COV.DE'), { ticker: '1COV.DE', markets: ['eu'], yahoo: ['1COV.DE'] });
+  assert.deepEqual(parseInput('XETR:IFX'), { ticker: 'IFX', markets: ['eu'], yahoo: ['IFX.DE'] });
+  assert.deepEqual(parseInput('OMXSTO:VOLV_B'), { ticker: 'VOLV_B', markets: ['eu'], yahoo: ['VOLV-B.ST'] });
+  assert.deepEqual(parseInput('LSE:BT.A'), { ticker: 'BT.A', markets: ['eu'], yahoo: ['BT-A.L'] });
+  assert.deepEqual(parseInput('EURONEXT:MC'), {
+    ticker: 'MC',
+    markets: ['eu'],
+    yahoo: ['MC.PA', 'MC.AS', 'MC.BR', 'MC.LS', 'MC.IR'],
+  });
 });
 
 test('parseInput rejects unsupported input', () => {
@@ -25,7 +41,25 @@ test('marketOf and tickerOf read a symbol id', () => {
   assert.equal(marketOf('TPEX:6488'), 'tw');
   assert.equal(marketOf('NASDAQ:AAPL'), 'us');
   assert.equal(marketOf('BINANCE:BTCUSDT'), 'crypto');
+  assert.equal(marketOf('XETR:IFX'), 'eu');
+  assert.equal(marketOf('EURONEXT:ASML'), 'eu');
+  assert.equal(marketOf('OMXSTO:SIVE'), 'eu');
   assert.equal(tickerOf('NYSE:BRK.B'), 'BRK.B');
+});
+
+test('europeIdOf turns a Yahoo ticker into the TradingView form', () => {
+  assert.equal(europeIdOf('IFX.DE'), 'XETR:IFX');
+  assert.equal(europeIdOf('IQE.L'), 'LSE:IQE');
+  assert.equal(europeIdOf('SIVE.ST'), 'OMXSTO:SIVE');
+  assert.equal(europeIdOf('ASML.AS'), 'EURONEXT:ASML');
+  assert.equal(europeIdOf('RYA.IR'), 'EURONEXT:RYA');
+  // Share classes: tested on TradingView, OMXSTO:VOLV.B and LSE:BT_A have no data.
+  assert.equal(europeIdOf('VOLV-B.ST'), 'OMXSTO:VOLV_B');
+  assert.equal(europeIdOf('NOVO-B.CO'), 'OMXCOP:NOVO_B');
+  assert.equal(europeIdOf('BT-A.L'), 'LSE:BT.A');
+  assert.equal(europeIdOf('IFX.F'), null);
+  assert.equal(europeIdOf('IFXY'), null);
+  assert.equal(europeIdOf('.DE'), null);
 });
 
 test('isChartUrl accepts only TradingView chart pages', () => {

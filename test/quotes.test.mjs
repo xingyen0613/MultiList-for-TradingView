@@ -46,11 +46,19 @@ test('parseMis ignores the empty row for an unknown code', () => {
   assert.equal(parseMis({ msgArray: [{ c: '', z: '-' }] }).size, 0);
 });
 
-test('parseYahooSpark reads a real response and restores the share class form', () => {
+test('parseYahooSpark reads a real response and keeps the Yahoo form', () => {
   const quotes = parseYahooSpark(fixture('yahoo-spark'));
   assert.ok(quotes.get('AAPL').price > 0);
   assert.equal(typeof quotes.get('AAPL').changePercent, 'number');
-  assert.ok(quotes.get('BRK.B').price > 0);
+  assert.ok(quotes.get('BRK-B').price > 0);
+});
+
+test('parseYahooSpark reads a real response for European stocks', () => {
+  const quotes = parseYahooSpark(fixture('yahoo-spark-europe'));
+  for (const ticker of ['IFX.DE', 'SIVE.ST', 'IQE.L', 'VOLV-B.ST', 'BT-A.L']) {
+    assert.ok(quotes.get(ticker).price > 0, ticker);
+    assert.equal(typeof quotes.get(ticker).changePercent, 'number', ticker);
+  }
 });
 
 test('parseBinance reads a real response', () => {
@@ -108,6 +116,36 @@ test('fetchQuotes splits Yahoo requests into chunks of 20', async () => {
   const { quotes } = await fetchQuotes(ids, {});
   assert.deepEqual(requested, [20, 20, 5]);
   assert.equal(quotes.size, 45);
+});
+
+test('fetchQuotes asks Yahoo for BRK-B and returns it as NYSE:BRK.B', async () => {
+  let asked;
+  globalThis.fetch = async (url) => {
+    asked = new URL(url).searchParams.get('symbols');
+    return jsonResponse(fixture('yahoo-spark'));
+  };
+  const { quotes } = await fetchQuotes(['NYSE:BRK.B'], {});
+  assert.equal(asked, 'BRK-B');
+  assert.ok(quotes.get('NYSE:BRK.B').price > 0);
+});
+
+test('fetchQuotes gets European quotes from Yahoo with the saved Yahoo tickers', async () => {
+  let asked;
+  globalThis.fetch = async (url) => {
+    asked = new URL(url).searchParams.get('symbols').split(',');
+    return jsonResponse(fixture('yahoo-spark-europe'));
+  };
+  const yahoo = new Map([
+    ['XETR:IFX', 'IFX.DE'],
+    ['OMXSTO:VOLV_B', 'VOLV-B.ST'],
+    ['LSE:BT.A', 'BT-A.L'],
+  ]);
+  // Alpaca has no European stocks, so a key for it changes nothing here.
+  const keys = { alpacaId: 'id', alpacaSecret: 'secret' };
+  const { quotes, status } = await fetchQuotes([...yahoo.keys()], keys, yahoo);
+  assert.deepEqual(asked, ['IFX.DE', 'VOLV-B.ST', 'BT-A.L']);
+  assert.deepEqual([...quotes.keys()], ['XETR:IFX', 'OMXSTO:VOLV_B', 'LSE:BT.A']);
+  assert.deepEqual(status, [{ market: 'eu', source: 'Yahoo', errors: [] }]);
 });
 
 test('fetchQuotes uses the keyed source first if the user has a key', async () => {
@@ -207,24 +245,109 @@ test('resolveSymbol finds the right Taiwan exchange', async () => {
   assert.deepEqual(await resolveSymbol('6488'), { id: 'TPEX:6488', name: '環球晶' });
 });
 
+const usMeta = (exchangeName, shortName) =>
+  jsonResponse({ chart: { result: [{ meta: { exchangeName, shortName, regularMarketPrice: 10 } }] } });
+
 test('resolveSymbol maps the Yahoo exchange to the TradingView exchange', async () => {
-  globalThis.fetch = async () =>
-    jsonResponse({ chart: { result: [{ meta: { exchangeName: 'PCX', shortName: 'SPDR' } }] } });
+  globalThis.fetch = async () => usMeta('PCX', 'SPDR');
   assert.deepEqual(await resolveSymbol('SPY'), { id: 'AMEX:SPY', name: 'SPDR' });
 });
 
 test('resolveSymbol tries the US market if Binance has no such pair', async () => {
   globalThis.fetch = async (url) => {
     if (new URL(url).hostname === 'data-api.binance.vision') return jsonResponse({}, 400);
-    return jsonResponse({ chart: { result: [{ meta: { exchangeName: 'NYQ', shortName: 'X' } }] } });
+    return usMeta('NYQ', 'X');
   };
   assert.deepEqual(await resolveSymbol('ABCBTC'), { id: 'NYSE:ABCBTC', name: 'X' });
 });
 
+test('resolveSymbol skips an old US ticker with no price and finds the European stock', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    asked.push(pathname);
+    return jsonResponse(fixture(pathname.includes('/search') ? 'yahoo-search-iqe' : 'yahoo-chart-ghost'));
+  };
+  assert.deepEqual(await resolveSymbol('iqe'), { id: 'LSE:IQE', name: 'IQE plc', yahoo: 'IQE.L' });
+  assert.deepEqual(asked, ['/v8/finance/chart/IQE', '/v1/finance/search']);
+});
+
+test('resolveSymbol keeps a US stock first and does not search Europe', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    asked.push(new URL(url).pathname);
+    return usMeta('NYQ', 'SAP SE');
+  };
+  assert.deepEqual(await resolveSymbol('SAP'), { id: 'NYSE:SAP', name: 'SAP SE' });
+  assert.deepEqual(asked, ['/v8/finance/chart/SAP']);
+});
+
+test('resolveSymbol takes the first European match of the search', async () => {
+  globalThis.fetch = async (url) => {
+    if (new URL(url).pathname.includes('/chart/')) return jsonResponse({}, 404);
+    return jsonResponse({
+      quotes: [
+        { symbol: 'IFXY', exchange: 'OID', quoteType: 'EQUITY', longname: 'OTC' },
+        { symbol: 'IFX.F', exchange: 'FRA', quoteType: 'EQUITY', longname: 'Frankfurt' },
+        { symbol: 'IFXA.HA', exchange: 'HAN', quoteType: 'EQUITY', longname: 'Other ticker' },
+        { symbol: 'IFXA.L', exchange: 'LSE', quoteType: 'EQUITY', longname: 'Other ticker' },
+        { symbol: 'IFX.PA', exchange: 'PAR', quoteType: 'MUTUALFUND', longname: 'Fund' },
+        { symbol: 'IFX.DE', exchange: 'GER', quoteType: 'EQUITY', longname: 'Infineon Technologies AG' },
+        { symbol: 'IFX.L', exchange: 'LSE', quoteType: 'EQUITY', longname: 'Later match' },
+      ],
+    });
+  };
+  assert.deepEqual(await resolveSymbol('IFX'), {
+    id: 'XETR:IFX',
+    name: 'Infineon Technologies AG',
+    yahoo: 'IFX.DE',
+  });
+});
+
+test('resolveSymbol reads the Yahoo form directly', async () => {
+  globalThis.fetch = async (url) => {
+    assert.equal(new URL(url).pathname, '/v8/finance/chart/IFX.DE');
+    return jsonResponse(fixture('yahoo-chart-europe'));
+  };
+  assert.deepEqual(await resolveSymbol('ifx.de'), {
+    id: 'XETR:IFX',
+    name: 'Infineon Technologies AG',
+    yahoo: 'IFX.DE',
+  });
+});
+
+test('resolveSymbol tries each Euronext exchange for EURONEXT:ASML', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const ticker = new URL(url).pathname.split('/').pop();
+    asked.push(ticker);
+    if (ticker !== 'ASML.AS') return jsonResponse({}, 404);
+    return jsonResponse({ chart: { result: [{ meta: { longName: 'ASML Holding N.V.', regularMarketPrice: 1283.6 } }] } });
+  };
+  assert.deepEqual(await resolveSymbol('EURONEXT:ASML'), {
+    id: 'EURONEXT:ASML',
+    name: 'ASML Holding N.V.',
+    yahoo: 'ASML.AS',
+  });
+  assert.deepEqual(asked, ['ASML.PA', 'ASML.AS']);
+});
+
+test('resolveSymbol keeps the exchange that the user typed', async () => {
+  globalThis.fetch = async (url) => {
+    if (new URL(url).pathname.includes('/chart/')) return jsonResponse({}, 404);
+    return jsonResponse({ quotes: [{ symbol: 'IFX.L', exchange: 'LSE', quoteType: 'EQUITY', longname: 'Other' }] });
+  };
+  await assert.rejects(resolveSymbol('XETR:IFX'), /找不到 IFX/);
+  await assert.rejects(resolveSymbol('IFX.DE'), /找不到 IFX.DE/);
+});
+
 test('resolveSymbol explains each failure', async () => {
-  globalThis.fetch = async () => jsonResponse({}, 404);
+  // Tested: Yahoo search answers an unknown ticker with an empty list.
+  globalThis.fetch = async (url) =>
+    new URL(url).pathname.includes('/search') ? jsonResponse({ quotes: [] }) : jsonResponse({}, 404);
   await assert.rejects(resolveSymbol('ZZZZZ'), /找不到 ZZZZZ/);
   await assert.rejects(resolveSymbol('台積電'), /不支援/);
+  await assert.rejects(resolveSymbol('XETR:ZZZQQ'), /找不到 ZZZQQ/);
 
   globalThis.fetch = async () => jsonResponse({}, 429);
   await assert.rejects(resolveSymbol('AAPL'), /查詢 AAPL 失敗（HTTP 429）/);

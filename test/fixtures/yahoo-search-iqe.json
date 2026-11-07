@@ -1,0 +1,101 @@
+{
+ "quotes": [
+  {
+   "exchange": "LSE",
+   "shortname": "IQE PLC ORD 1P",
+   "quoteType": "EQUITY",
+   "symbol": "IQE.L",
+   "index": "quotes",
+   "score": 20392,
+   "typeDisp": "Equity",
+   "longname": "IQE plc",
+   "exchDisp": "London",
+   "sector": "Technology",
+   "sectorDisp": "Technology",
+   "industry": "Semiconductor Equipment & Materials",
+   "industryDisp": "Semiconductor Equipment & Materials",
+   "dispSecIndFlag": true,
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "PNK",
+   "shortname": "IQE Plc",
+   "quoteType": "EQUITY",
+   "symbol": "IQEPF",
+   "index": "quotes",
+   "score": 20049,
+   "typeDisp": "Equity",
+   "longname": "IQE plc",
+   "exchDisp": "OTC Markets",
+   "sector": "Technology",
+   "sectorDisp": "Technology",
+   "industry": "Semiconductor Equipment & Materials",
+   "industryDisp": "Semiconductor Equipment & Materials",
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "PNK",
+   "shortname": "IQE Plc",
+   "quoteType": "EQUITY",
+   "symbol": "IQEPY",
+   "index": "quotes",
+   "score": 20028,
+   "typeDisp": "Equity",
+   "longname": "IQE plc",
+   "exchDisp": "OTC Markets",
+   "sector": "Technology",
+   "sectorDisp": "Technology",
+   "industry": "Semiconductor Equipment & Materials",
+   "industryDisp": "Semiconductor Equipment & Materials",
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "PAR",
+   "shortname": "INDEXIQ FACTORS SUSTAINABLE COR",
+   "quoteType": "ETF",
+   "symbol": "IQEC.PA",
+   "index": "quotes",
+   "score": 20005,
+   "typeDisp": "ETF",
+   "longname": "IndexIQ Factors Sustainable Corporate Euro Bond UCITS ETF Dis",
+   "exchDisp": "Paris",
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "MIL",
+   "shortname": "INDEXIQ FACT SUST CORPOR EUR UC",
+   "quoteType": "ETF",
+   "symbol": "IQEC.MI",
+   "index": "quotes",
+   "score": 20004,
+   "typeDisp": "ETF",
+   "longname": "IndexIQ Factors Sustainable Corporate Euro Bond UCITS ETF Dis",
+   "exchDisp": "Milan",
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "PAR",
+   "shortname": "INDEXIQ FACTORS SUSTAINABLE EUR",
+   "quoteType": "ETF",
+   "symbol": "IQEE.PA",
+   "index": "quotes",
+   "score": 20004,
+   "typeDisp": "ETF",
+   "longname": "IndexIQ Factors Sustainable Europe Equity UCITS ETF Cap",
+   "exchDisp": "Paris",
+   "isYahooFinance": true
+  },
+  {
+   "exchange": "MIL",
+   "shortname": "Invesco Europe Enhanced Equity ",
+   "quoteType": "ETF",
+   "symbol": "IQEA.MI",
+   "index": "quotes",
+   "score": 20002,
+   "typeDisp": "ETF",
+   "longname": "Invesco Markets II plc - Invesco Europe Enhanced Equity UCITS ETF",
+   "exchDisp": "Milan",
+   "isYahooFinance": true
+  }
+ ]
+}
