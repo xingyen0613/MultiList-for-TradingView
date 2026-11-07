@@ -1,3 +1,4 @@
+import { switchSymbolInPage } from './lib/chart-page.js';
 import { directionOf, formatChange, formatPercent, formatPrice, formatTime } from './lib/format.js';
 import { addSymbol, createGroup, moveGroup, moveSymbol, removeSymbol, visibleSymbolIds } from './lib/groups.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
@@ -219,18 +220,57 @@ async function addSymbols(groupId, text) {
   commit();
 }
 
+// A reload loses indicators that are not saved, so the URL is only the fallback.
+async function showOnChartTab(tab, symbolId) {
+  const [injection] = await chrome.scripting
+    .executeScript({
+      target: { tabId: tab.id },
+      func: switchSymbolInPage,
+      args: [symbolId],
+    })
+    .catch(() => []);
+  const switched = Boolean(injection?.result);
+  // A page that is still loading has no unsaved changes to lose.
+  const warn = !switched && tab.status === 'complete';
+  state.notice = warn ? '無法在頁面內切換，已改用重新載入，未儲存的圖表變更可能遺失' : '';
+  renderStatus();
+  if (!switched) await chrome.tabs.update(tab.id, { url: chartUrl(symbolId, tab.url) });
+}
+
 async function openChart(symbolId) {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (isChartUrl(active?.url)) {
-    await chrome.tabs.update(active.id, { url: chartUrl(symbolId, active.url) });
+    await showOnChartTab(active, symbolId);
     return;
   }
   const tabs = await chrome.tabs.query({ currentWindow: true, url: 'https://*.tradingview.com/*' });
   const chartTab = tabs.find((tab) => isChartUrl(tab.url));
   if (chartTab) {
-    await chrome.tabs.update(chartTab.id, { active: true, url: chartUrl(symbolId, chartTab.url) });
+    await chrome.tabs.update(chartTab.id, { active: true });
+    await showOnChartTab(chartTab, symbolId);
   } else {
     await chrome.tabs.create({ url: chartUrl(symbolId) });
+  }
+}
+
+let chartBusy = false;
+let nextChartSymbol = null;
+
+// Runs one switch at a time. During a switch, only the last clicked symbol waits its turn.
+async function requestChart(symbolId) {
+  nextChartSymbol = symbolId;
+  if (chartBusy) return;
+  chartBusy = true;
+  try {
+    while (nextChartSymbol) {
+      const symbol = nextChartSymbol;
+      nextChartSymbol = null;
+      await openChart(symbol);
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    chartBusy = false;
   }
 }
 
@@ -239,7 +279,7 @@ function selectSymbol(symbolId) {
   for (const row of groupsContainer.querySelectorAll('.row')) {
     row.classList.toggle('selected', row.dataset.symbol === symbolId);
   }
-  openChart(symbolId);
+  requestChart(symbolId);
 }
 
 function paintRow(row) {

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "A side panel watchlist with unlimited groups. The same symbol can appear in many groups.",
   "minimum_chrome_version": "117",
-  "permissions": ["sidePanel", "storage"],
+  "permissions": ["sidePanel", "storage", "scripting"],
   "host_permissions": [
     "https://*.tradingview.com/*",
     "https://mis.twse.com.tw/*",

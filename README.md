@@ -48,9 +48,11 @@ TWSE MIS and Yahoo Finance are not documented public APIs. They can change or bl
 
 ## Limits
 
-- Each symbol change reloads the TradingView page.
+- A symbol change uses the symbol search on the TradingView page. The page does not reload, so unsaved chart changes stay.
+- If TradingView changes that page, the extension reloads the page with the new symbol and shows a notice in the panel. A reload can lose unsaved chart changes.
 - A free TradingView account still allows 2 indicators per chart.
 - The extension does not call internal TradingView endpoints, because the TradingView terms prohibit this.
+- The extension controls the TradingView page when you click a symbol. Section 12 of the TradingView terms restricts automated access and browser extensions. This project is for personal use. Read the terms before you share it.
 - It works only in desktop browsers based on Chromium.
 - Prices are for reference. Sources can be delayed or wrong.
 
