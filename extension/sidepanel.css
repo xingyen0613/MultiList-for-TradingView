@@ -213,6 +213,42 @@ input {
   overflow-y: auto;
 }
 
+/* The icon and the label line up with the chevron and the name of a group header. */
+.add-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-group:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.add-group svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.add-group-form {
+  border-bottom: 1px solid var(--border);
+}
+
 .empty,
 .group-empty {
   margin: 0;

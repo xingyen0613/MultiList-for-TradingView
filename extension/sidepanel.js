@@ -940,34 +940,44 @@ function render() {
   if (state.importing) nodes.push(importPanel());
   if (state.creating) {
     nodes.push(
-      textForm({
-        label: '新分組名稱',
-        placeholder: '新分組名稱，按 Enter 建立',
-        onCancel: cancelEditing,
-        onSubmit: (name) =>
-          commit(() => {
-            const group = createGroup(name);
-            if (state.tab !== ALL_TAB) group.tabId = state.tab;
-            state.groups.push(group);
-            clearEditing();
-            state.addingTo = group.id;
-          }),
-      }),
+      el(
+        'div',
+        { class: 'add-group-form' },
+        textForm({
+          label: '新分組名稱',
+          placeholder: '新分組名稱，按 Enter 建立',
+          onCancel: cancelEditing,
+          onSubmit: (name) =>
+            commit(() => {
+              const group = createGroup(name);
+              if (state.tab !== ALL_TAB) group.tabId = state.tab;
+              state.groups.push(group);
+              clearEditing();
+              state.addingTo = group.id;
+            }),
+        }),
+      ),
+    );
+  } else {
+    nodes.push(
+      el('button', { type: 'button', class: 'add-group', onclick: () => startEditing('creating', true) }, svgIcon('plus'), '新增分組'),
     );
   }
+  let shown = 0;
   state.groups.forEach((group, index) => {
     if (!groupInTab(group, state.tab)) return;
+    shown += 1;
     nodes.push(el('section', { class: 'group' }, renderHeader(group, index), ...renderBody(group)));
   });
-  if (nodes.length === 0) nodes.push(el('p', { class: 'empty' }, emptyText()));
+  if (shown === 0) nodes.push(el('p', { class: 'empty' }, emptyText()));
   groupsContainer.replaceChildren(...nodes);
   groupsContainer.scrollTop = scrollTop;
   groupsContainer.querySelector('[data-autofocus]')?.focus();
 }
 
 function emptyText() {
-  if (state.tab === ALL_TAB) return '還沒有分組。按右上角的 + 建立第一個分組。';
-  return `「${tabLabel(state.tab)}」還沒有分組。按右上角的 + 建立分組，或把其他分頁的分組標題拖到這個分頁上。`;
+  if (state.tab === ALL_TAB) return '還沒有分組。按上方的「新增分組」建立第一個分組。';
+  return `「${tabLabel(state.tab)}」還沒有分組。按上方的「新增分組」建立分組，或把其他分頁的分組標題拖到這個分頁上。`;
 }
 
 function renderStatus() {
@@ -1025,10 +1035,7 @@ async function refresh() {
 function setUpTopbar() {
   document
     .getElementById('topbar-actions')
-    .append(
-      iconButton('import', '從 TradingView 匯入名單', startImport),
-      iconButton('plus', '新增分組', () => startEditing('creating', true)),
-    );
+    .append(iconButton('import', '從 TradingView 匯入名單', startImport));
 }
 
 // The counters work like the ones for groups: a sync does not replace tabs that are not saved yet.

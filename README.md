@@ -40,7 +40,7 @@ The extension needs Chrome 117 or later.
 
 ## Use
 
-1. Click **+** at the top of the panel to create a group.
+1. Click **新增分組** (new group) at the top of the list to create a group.
 2. Type a code or a name, for example `2330`, `台積電`, `AAPL` or `SUI`. Results from TradingView show below the box. Use the filter buttons to show one kind only, for example crypto.
 3. Click a result, or press ↑ or ↓ to mark one and press Enter. A result marked **無報價** has no price source, but you can still add it.
 4. Click a row to open it on the chart.
