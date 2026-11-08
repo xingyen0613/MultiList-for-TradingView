@@ -61,10 +61,10 @@ MultiList for TradingView（以下稱「本插件」）是非官方工具，與 
 
 ## 5. 資料用途
 
-- 提供與改善插件功能，包括之後可能在插件內提供的彙總市場趨勢功能。
+- 提供與改善插件功能，包括之後可能在插件內提供的彙總市場趨勢功能（例如熱門代碼統計）。
 - 不出售資料。
 - 不用於廣告。
-- 不轉給第三方，例外只有代管服務供應商（Google Cloud）與法律要求。
+- 不轉給第三方，例外只有代管服務供應商（Cloudflare）與法律要求。
 - 人只會檢視彙總且匿名化的統計。
 
 我們對從本插件取得之資料的使用，符合 Chrome Web Store User Data Policy，包括 Limited Use（有限使用）規定。
@@ -77,7 +77,7 @@ MultiList for TradingView（以下稱「本插件」）是非官方工具，與 
 
 ## 7. 存放位置
 
-分享的資料存放在 Google Cloud（Firestore，台灣 asia-east1 區域）。
+分享的資料存放在 Cloudflare（Workers 與 D1 資料庫）。
 
 ## 8. 兒童
 

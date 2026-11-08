@@ -61,10 +61,10 @@ We do not store IP addresses.
 
 ## 5. How we use the data
 
-- To provide and improve the extension, including aggregated market-trend features that may be added to the extension later.
+- To provide and improve the extension, including aggregated market-trend features, such as popular-symbol statistics, that may be added to the extension later.
 - We do not sell the data.
 - We do not use it for advertising.
-- We do not transfer it to third parties, except to our hosting provider (Google Cloud) and where required by law.
+- We do not transfer it to third parties, except to our hosting provider (Cloudflare) and where required by law.
 - People only look at aggregated, anonymized statistics.
 
 The use of data received from the extension complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.
@@ -77,7 +77,7 @@ The use of data received from the extension complies with the Chrome Web Store U
 
 ## 7. Where data is stored
 
-Shared data is stored on Google Cloud (Firestore, Taiwan region, asia-east1).
+Shared data is stored on Cloudflare (Workers and the D1 database).
 
 ## 8. Children
 

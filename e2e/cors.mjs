@@ -20,7 +20,7 @@ const registeredAt = () =>
 try {
   await step('manifest asks for no host permission to the server', async () => {
     const manifest = JSON.parse(readFileSync(join(stack.extDir, 'manifest.json')));
-    assert.ok(!manifest.host_permissions.some((host) => host.includes('localhost') || host.includes('run.app')));
+    assert.ok(!manifest.host_permissions.some((host) => host.includes('localhost') || host.includes('workers.dev')));
   });
 
   await step('without consent the extension sends nothing', async () => {
