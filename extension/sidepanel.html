@@ -27,7 +27,14 @@
       <p id="status-error" class="status-error"></p>
       <p id="status"></p>
       <details id="settings">
-        <summary>API key 設定</summary>
+        <summary>設定</summary>
+        <div id="sharing-setting">
+          <label class="check-row"><input id="sharing-toggle" type="checkbox" />匿名分享觀察清單</label>
+          <p class="hint">
+            關閉後停止上傳，已上傳的資料不會刪除。
+            <a id="sharing-privacy" target="_blank" rel="noopener">隱私權政策</a>
+          </p>
+        </div>
         <form id="keys-form">
           <p class="hint">
             沒有 key 時，台股用 TWSE MIS，美股用 Yahoo。Key 只存在這台電腦，不會同步。

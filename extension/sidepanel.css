@@ -474,6 +474,7 @@ input {
 
 .confirm-dialog {
   width: min(280px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -487,12 +488,35 @@ input {
 }
 
 .dialog-body {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 34px);
   padding: 14px 16px 12px;
 }
 
-.dialog-body p {
-  margin: 0 0 14px;
+/* A long text scrolls inside the popup, so the buttons stay on the screen. */
+.dialog-content {
+  min-height: 0;
+  margin-bottom: 14px;
+  overflow-y: auto;
+}
+
+.dialog-content p {
+  margin: 0 0 8px;
   overflow-wrap: anywhere;
+}
+
+.dialog-content p:last-child {
+  margin-bottom: 0;
+}
+
+.dialog-title {
+  font-weight: 600;
+}
+
+.dialog-content a,
+#sharing-setting a {
+  color: var(--accent);
 }
 
 .dialog-actions {
@@ -552,6 +576,20 @@ input {
 #settings summary {
   margin-top: 4px;
   cursor: pointer;
+}
+
+#sharing-setting {
+  padding-top: 6px;
+}
+
+#sharing-setting .hint {
+  margin: 2px 0 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 #keys-form {

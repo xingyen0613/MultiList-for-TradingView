@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "A side panel watchlist with unlimited groups. The same symbol can appear in many groups.",
   "minimum_chrome_version": "117",
-  "permissions": ["sidePanel", "storage", "scripting"],
+  "permissions": ["sidePanel", "storage", "scripting", "alarms"],
   "host_permissions": [
     "https://*.tradingview.com/*",
     "https://mis.twse.com.tw/*",
@@ -15,7 +15,8 @@
     "https://data.alpaca.markets/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "side_panel": {
     "default_path": "sidepanel.html"

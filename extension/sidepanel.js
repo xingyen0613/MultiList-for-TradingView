@@ -15,6 +15,8 @@ import {
   removeSymbol,
   visibleSymbolIds,
 } from './lib/groups.js';
+import { diffGroups } from './lib/changes.js';
+import { PRIVACY_URL } from './lib/config.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
   loadColumnWidths,
@@ -30,6 +32,7 @@ import {
   syncUsage,
   tabsChanged,
 } from './lib/store.js';
+import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
 import { chartUrl, isChartUrl, marketOf, tickerOf } from './lib/symbols.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
 
@@ -154,6 +157,20 @@ function textForm({ placeholder, value = '', label, onSubmit, onCancel }) {
 
 let saveQueue = Promise.resolve();
 
+// The groups as last saved by this panel or read from storage. A save compares against it,
+// so only edits made in this panel are recorded, not changes from another window or computer.
+let baseline = [];
+const setBaseline = (groups) => {
+  baseline = structuredClone(groups);
+};
+
+// The background page keeps the log, and drops the events without consent.
+function recordSaved(saved) {
+  const events = diffGroups(baseline, saved, Date.now());
+  baseline = saved;
+  if (events.length > 0) chrome.runtime.sendMessage({ type: 'changes', events }).catch(() => {});
+}
+
 // Saves run one at a time, and each one saves the latest groups. Two saves at once
 // can lose a group, because each one removes items that it does not know.
 function persist() {
@@ -162,11 +179,14 @@ function persist() {
   saveQueue = saveQueue
     .then(async () => {
       try {
-        await saveGroups(state.groups);
+        const saved = structuredClone(state.groups);
+        await saveGroups(saved);
         state.saveError = '';
+        recordSaved(saved);
       } catch (error) {
         state.saveError = `儲存失敗：${error.message}`;
         state.groups = await loadGroups();
+        setBaseline(state.groups);
         render();
       } finally {
         state.saving -= 1;
@@ -185,6 +205,7 @@ async function syncFromStorage() {
   const groups = await loadGroups();
   if (edits !== state.edits || JSON.stringify(groups) === JSON.stringify(state.groups)) return;
   state.groups = groups;
+  setBaseline(groups);
   render();
   refresh();
 }
@@ -321,42 +342,87 @@ function cancelEditing() {
   render();
 }
 
-// A delete asks first in a popup. 取消, Escape or a click outside the popup closes it.
-// The focus starts on 取消, so a quick Enter does not delete.
-function confirmDelete(message, onDelete) {
+// Shows a popup with the given content and buttons. Escape or a click outside closes it
+// and calls onDismiss. The first button gets the focus.
+// actions: [{ label, className, onClick }]. A button closes the popup, then runs its onClick.
+function showDialog({ content, actions, onDismiss }) {
   const dialog = el(
     'dialog',
     { class: 'confirm-dialog' },
     el(
       'div',
       { class: 'dialog-body' },
-      el('p', {}, message),
+      el('div', { class: 'dialog-content' }, ...[content].flat()),
       el(
         'div',
         { class: 'dialog-actions' },
-        el('button', { type: 'button', class: 'text-button', autofocus: true, onclick: () => dialog.close() }, '取消'),
-        el(
-          'button',
-          {
-            type: 'button',
-            class: 'text-button danger',
-            onclick: () => {
-              dialog.close();
-              onDelete();
+        ...actions.map((action, index) =>
+          el(
+            'button',
+            {
+              type: 'button',
+              class: `text-button ${action.className ?? ''}`.trim(),
+              autofocus: index === 0,
+              onclick: () => {
+                dialog.close();
+                action.onClick?.();
+              },
             },
-          },
-          '刪除',
+            action.label,
+          ),
         ),
       ),
     ),
   );
   // The dialog has no padding, so a click on the dialog itself is a click on the backdrop.
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target !== dialog) return;
+    dialog.close();
+    onDismiss?.();
   });
+  // Escape closes the dialog without a button.
+  dialog.addEventListener('cancel', () => onDismiss?.());
   dialog.addEventListener('close', () => dialog.remove());
   document.body.append(dialog);
   dialog.showModal();
+  return dialog;
+}
+
+// A delete asks first in a popup. 取消, Escape or a click outside the popup closes it.
+// The focus starts on 取消, so a quick Enter does not delete.
+function confirmDelete(message, onDelete) {
+  showDialog({
+    content: el('p', {}, message),
+    actions: [
+      { label: '取消' },
+      { label: '刪除', className: 'danger', onClick: onDelete },
+    ],
+  });
+}
+
+// Asks once whether to share anonymous list changes. Escape or a click outside decides
+// nothing, so the question comes back the next time the side panel opens.
+function showConsentDialog() {
+  const privacyLink = el('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, '隱私權政策');
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '匿名分享觀察清單？'),
+      el(
+        'p',
+        {},
+        'MultiList 會匿名記錄你的觀察清單，不含任何能認出你的個人資訊。資料只用於 MultiList 的功能開發，例如熱門代碼統計。',
+      ),
+      el('p', {}, privacyLink),
+    ],
+    actions: [
+      { label: '不同意', onClick: () => setConsent(false) },
+      { label: '同意', onClick: () => setConsent(true) },
+    ],
+  });
+}
+
+async function askForConsent() {
+  if (await needsConsentDecision()) showConsentDialog();
 }
 
 function confirmGroupDelete(group) {
@@ -1446,6 +1512,20 @@ function setUpKeysForm() {
   });
 }
 
+// The checkbox in the settings follows the consent, also when another window changes it.
+function setUpSharingToggle() {
+  const toggle = document.getElementById('sharing-toggle');
+  document.getElementById('sharing-privacy').href = PRIVACY_URL;
+  const show = async () => {
+    toggle.checked = await hasConsent();
+  };
+  toggle.addEventListener('change', () => setConsent(toggle.checked));
+  show();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.consent) show();
+  });
+}
+
 function watchStorage() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
@@ -1464,16 +1544,21 @@ async function start() {
     loadTabs(),
     loadColumnWidths(),
   ]);
+  setBaseline(state.groups);
+  // Lets the background page send the weekly upload if it is due.
+  chrome.runtime.sendMessage({ type: 'panelOpened' }).catch(() => {});
   applyTabs(tabs);
   setUpColumns(widths);
   setUpTopbar();
   renderTabs();
+  setUpSharingToggle();
   setUpKeysForm();
   watchStorage();
   render();
   refresh();
   setInterval(refresh, REFRESH_MS);
   document.addEventListener('visibilitychange', refresh);
+  await askForConsent();
 }
 
 start();
