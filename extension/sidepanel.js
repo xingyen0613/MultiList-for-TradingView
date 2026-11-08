@@ -5,7 +5,9 @@ import {
   addSymbol,
   ALL_TAB,
   createGroup,
+  createLooseGroup,
   groupInTab,
+  looseGroup,
   moveGroup,
   moveGroupToTab,
   moveSymbol,
@@ -63,7 +65,6 @@ const state = {
   customTabs: [],
   editingTab: null,
   creatingTab: false,
-  confirmingTabDelete: null,
   tabSaving: 0,
   tabEdits: 0,
   columnWidths: DEFAULT_WIDTHS,
@@ -72,7 +73,6 @@ const state = {
   selected: null,
   creating: false,
   renaming: null,
-  confirmingDelete: null,
   addingTo: null,
   addError: '',
   drag: null,
@@ -193,15 +193,24 @@ function groupById(groupId) {
   return state.groups.find((group) => group.id === groupId);
 }
 
+// A loose group has no name. Its title says which tab it belongs to.
+function groupTitle(group) {
+  if (!group.loose) return group.name;
+  const tab = group.tabId ? tabLabel(group.tabId) : '';
+  return tab ? `${tab} · 未分組` : '未分組';
+}
+
 // Renames, drags and closing a group need no new quotes, and Fugle has a low limit.
 function fetchNewQuotes() {
   if (visibleSymbolIds(state.groups, state.tab).some((id) => !lastFetched.has(id))) refresh();
 }
 
 // Applies a change to the groups, then saves, redraws and fetches any new quotes.
+// An empty loose group is dropped, unless its add form is open, so it does not use a sync item.
 function commit(change = () => {}) {
   state.notice = '';
   change();
+  state.groups = state.groups.filter((group) => !group.loose || group.symbols.length > 0 || group.id === state.addingTo);
   render();
   persist();
   fetchNewQuotes();
@@ -219,7 +228,6 @@ function tabLabel(tabId) {
 function clearTabEditing() {
   state.editingTab = null;
   state.creatingTab = false;
-  state.confirmingTabDelete = null;
 }
 
 function selectTab(tabId) {
@@ -248,7 +256,7 @@ function moveSymbolTo(drag, group, beforeSymbolId) {
   if (moveSymbol(state.groups, drag.groupId, drag.symbolId, group.id, beforeSymbolId)) {
     commit();
   } else {
-    state.notice = `${tickerOf(drag.symbolId)} 已經在「${group.name}」`;
+    state.notice = `${tickerOf(drag.symbolId)} 已經在「${groupTitle(group)}」`;
     renderStatus();
   }
 }
@@ -264,10 +272,39 @@ function toggleAdding(group) {
   commit();
 }
 
+// The add form and a drop need a group, so they make the loose group of the tab.
+// commit drops it again if it stays empty.
+function ensureLooseGroup() {
+  let group = looseGroup(state.groups, state.tab);
+  if (!group) {
+    group = createLooseGroup(state.tab);
+    state.groups.unshift(group);
+  }
+  return group;
+}
+
+function toggleAddingLoose() {
+  toggleAdding(ensureLooseGroup());
+}
+
+// A tab with no loose symbols shows no rows to drop on, so the bar with the add buttons
+// also takes a symbol out of its group.
+function makeLooseDropTarget(node) {
+  node.addEventListener('dragover', (event) => {
+    if (state.drag?.kind === 'symbol') markDrop(event, node, 'drop-into');
+  });
+  node.addEventListener('dragleave', () => node.classList.remove('drop-into'));
+  node.addEventListener('drop', (event) => {
+    if (state.drag?.kind !== 'symbol') return;
+    event.preventDefault();
+    clearDropMarks();
+    moveSymbolTo(takeDrag(), ensureLooseGroup(), null);
+  });
+}
+
 function clearEditing() {
   state.creating = false;
   state.renaming = null;
-  state.confirmingDelete = null;
   state.addingTo = null;
   state.addError = '';
   resetSearch();
@@ -282,6 +319,53 @@ function startEditing(field, value) {
 function cancelEditing() {
   clearEditing();
   render();
+}
+
+// A delete asks first in a popup. 取消, Escape or a click outside the popup closes it.
+// The focus starts on 取消, so a quick Enter does not delete.
+function confirmDelete(message, onDelete) {
+  const dialog = el(
+    'dialog',
+    { class: 'confirm-dialog' },
+    el(
+      'div',
+      { class: 'dialog-body' },
+      el('p', {}, message),
+      el(
+        'div',
+        { class: 'dialog-actions' },
+        el('button', { type: 'button', class: 'text-button', autofocus: true, onclick: () => dialog.close() }, '取消'),
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'text-button danger',
+            onclick: () => {
+              dialog.close();
+              onDelete();
+            },
+          },
+          '刪除',
+        ),
+      ),
+    ),
+  );
+  // The dialog has no padding, so a click on the dialog itself is a click on the backdrop.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+function confirmGroupDelete(group) {
+  confirmDelete(`刪除「${group.name}」？`, () =>
+    commit(() => {
+      state.groups = state.groups.filter((item) => item.id !== group.id);
+      clearEditing();
+    }),
+  );
 }
 
 async function addSymbols(groupId, text) {
@@ -301,7 +385,7 @@ async function addSymbols(groupId, text) {
   const group = groupById(groupId);
   if (!group) return;
   for (const symbol of added) {
-    if (!addSymbol(group, symbol)) errors.push(`${tickerOf(symbol.id)} 已經在這個分組`);
+    if (!addSymbol(group, symbol)) errors.push(`${tickerOf(symbol.id)} 已經在「${groupTitle(group)}」`);
   }
   state.addError = errors.join('；');
   resetSearch();
@@ -321,7 +405,7 @@ async function addSearchResult(groupId, result) {
   }
   const group = groupById(groupId);
   if (!group) return;
-  state.addError = addSymbol(group, symbol) ? '' : `${result.ticker} 已經在這個分組`;
+  state.addError = addSymbol(group, symbol) ? '' : `${result.ticker} 已經在「${groupTitle(group)}」`;
   resetSearch();
   commit();
 }
@@ -530,11 +614,12 @@ function makeRowDropTarget(row, group, symbolIndex) {
   });
 }
 
+// The loose symbols always come before the groups, so a group cannot move next to them.
 function makeHeaderDropTarget(header, group, groupIndex) {
   header.addEventListener('dragover', (event) => {
     if (state.drag?.kind === 'symbol') {
       markDrop(event, header, 'drop-into');
-    } else if (state.drag?.kind === 'group') {
+    } else if (state.drag?.kind === 'group' && !group.loose) {
       markDrop(event, header, isLowerHalf(event, header) ? 'drop-after' : 'drop-before');
     }
   });
@@ -543,7 +628,7 @@ function makeHeaderDropTarget(header, group, groupIndex) {
     const drag = takeDrag();
     if (drag?.kind === 'symbol') {
       moveSymbolTo(drag, group, null);
-    } else if (drag?.kind === 'group') {
+    } else if (drag?.kind === 'group' && !group.loose) {
       const next = state.groups[groupIndex + 1]?.id ?? null;
       const before = isLowerHalf(event, header) ? next : group.id;
       if (before !== drag.groupId) commit(() => moveGroup(state.groups, drag.groupId, before));
@@ -582,7 +667,7 @@ function renderRow(group, symbol, symbolIndex) {
     el('span', { class: 'cell percent' }),
     iconButton(
       'close',
-      `從「${group.name}」移除 ${ticker}`,
+      `從「${groupTitle(group)}」移除 ${ticker}`,
       () => commit(() => removeSymbol(group, symbol.id)),
       'row-remove',
     ),
@@ -608,28 +693,6 @@ function renderHeader(group, groupIndex) {
     });
   }
 
-  if (state.confirmingDelete === group.id) {
-    return el(
-      'div',
-      { class: 'confirm' },
-      el('span', {}, `刪除「${group.name}」？`),
-      el(
-        'button',
-        {
-          type: 'button',
-          class: 'text-button danger',
-          onclick: () =>
-            commit(() => {
-              state.groups = state.groups.filter((item) => item.id !== group.id);
-              clearEditing();
-            }),
-        },
-        '刪除',
-      ),
-      el('button', { type: 'button', class: 'text-button', onclick: cancelEditing }, '取消'),
-    );
-  }
-
   const header = el(
     'div',
     { class: 'group-header' },
@@ -645,18 +708,19 @@ function renderHeader(group, groupIndex) {
           }),
       },
       svgIcon('chevron'),
-      el('span', { class: 'group-name' }, group.name),
+      el('span', { class: 'group-name' }, groupTitle(group)),
       el('span', { class: 'group-count' }, String(group.symbols.length)),
     ),
+    // Loose symbols have no name to change and no group to delete.
     el(
       'span',
       { class: 'group-actions' },
-      iconButton('edit', `重新命名「${group.name}」`, () => startEditing('renaming', group.id), 'secondary'),
-      iconButton('trash', `刪除「${group.name}」`, () => startEditing('confirmingDelete', group.id), 'secondary'),
-      iconButton('plus', `新增代碼到「${group.name}」`, () => toggleAdding(group)),
+      group.loose ? null : iconButton('edit', `重新命名「${group.name}」`, () => startEditing('renaming', group.id), 'secondary'),
+      group.loose ? null : iconButton('trash', `刪除「${group.name}」`, () => confirmGroupDelete(group), 'secondary'),
+      iconButton('plus', `新增代碼到「${groupTitle(group)}」`, () => toggleAdding(group)),
     ),
   );
-  makeDraggable(header, { kind: 'group', groupId: group.id });
+  if (!group.loose) makeDraggable(header, { kind: 'group', groupId: group.id });
   makeHeaderDropTarget(header, group, groupIndex);
   return header;
 }
@@ -707,9 +771,9 @@ function searchPanel() {
 function searchForm(group) {
   const input = el('input', {
     type: 'text',
-    placeholder: '代碼或名稱，例如 2330、台積電、AAPL、SUI',
+    placeholder: '代碼或名稱，例如 2330、台積電、AAPL、BTC',
     value: state.search.text,
-    'aria-label': `新增代碼到「${group.name}」`,
+    'aria-label': `新增代碼到「${groupTitle(group)}」`,
     role: 'combobox',
     'aria-autocomplete': 'list',
     'aria-controls': 'search-results',
@@ -831,7 +895,7 @@ function buildImport(picked, symbolOf) {
 
 function quotaMessage(usage) {
   if (usage.tooLarge) {
-    return `「${usage.tooLarge.name}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。請在 TradingView 把這個區段拆小，或不要勾選這個清單。`;
+    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。請在 TradingView 把這個區段拆小，或不要勾選這個清單。`;
   }
   if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。請少選幾個清單。`;
   return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。請少選幾個清單。`;
@@ -937,6 +1001,7 @@ function importPanel() {
 function render() {
   const { scrollTop } = groupsContainer;
   const nodes = [];
+  const own = looseGroup(state.groups, state.tab);
   if (state.importing) nodes.push(importPanel());
   if (state.creating) {
     nodes.push(
@@ -959,25 +1024,68 @@ function render() {
       ),
     );
   } else {
-    nodes.push(
-      el('button', { type: 'button', class: 'add-group', onclick: () => startEditing('creating', true) }, svgIcon('plus'), '新增分組'),
+    const actions = el(
+      'div',
+      { class: 'list-actions' },
+      el('button', { type: 'button', class: 'list-action add-group', onclick: () => startEditing('creating', true) }, svgIcon('plus'), '新增分組'),
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'list-action add-symbol',
+          'aria-pressed': String(Boolean(own) && state.addingTo === own.id),
+          onclick: toggleAddingLoose,
+        },
+        svgIcon('plus'),
+        '新增代碼',
+      ),
     );
+    makeLooseDropTarget(actions);
+    nodes.push(actions);
   }
-  let shown = 0;
+  const first = nodes.length;
+  if (own) nodes.push(looseSection(own));
+  if (state.tab === ALL_TAB) {
+    for (const group of otherLooseGroups()) {
+      nodes.push(el('section', { class: 'group' }, renderHeader(group, state.groups.indexOf(group)), ...renderBody(group)));
+    }
+  }
   state.groups.forEach((group, index) => {
-    if (!groupInTab(group, state.tab)) return;
-    shown += 1;
+    if (group.loose || !groupInTab(group, state.tab)) return;
     nodes.push(el('section', { class: 'group' }, renderHeader(group, index), ...renderBody(group)));
   });
-  if (shown === 0) nodes.push(el('p', { class: 'empty' }, emptyText()));
-  groupsContainer.replaceChildren(...nodes);
+  if (nodes.slice(first).every((node) => node === null)) nodes.push(el('p', { class: 'empty' }, emptyText()));
+  groupsContainer.replaceChildren(...nodes.filter(Boolean));
   groupsContainer.scrollTop = scrollTop;
   groupsContainer.querySelector('[data-autofocus]')?.focus();
 }
 
+// The loose symbols of the tab come first, with no header. The add form comes before them,
+// next to the button that opens it.
+function looseSection(group) {
+  const nodes = [];
+  if (state.addingTo === group.id) {
+    nodes.push(searchForm(group));
+    if (state.addError) nodes.push(el('p', { class: 'form-error', role: 'alert' }, state.addError));
+  }
+  nodes.push(...group.symbols.map((symbol, index) => renderRow(group, symbol, index)));
+  return nodes.length > 0 ? el('section', { class: 'group loose' }, ...nodes) : null;
+}
+
+// The all tab also shows the loose symbols of each custom tab, in the order of the tabs.
+function otherLooseGroups() {
+  const order = (group) => {
+    const index = state.customTabs.findIndex((tab) => tab.id === group.tabId);
+    return index === -1 ? state.customTabs.length : index;
+  };
+  return state.groups
+    .filter((group) => group.loose && group.tabId && (group.symbols.length > 0 || state.addingTo === group.id))
+    .sort((a, b) => order(a) - order(b));
+}
+
 function emptyText() {
-  if (state.tab === ALL_TAB) return '還沒有分組。按上方的「新增分組」建立第一個分組。';
-  return `「${tabLabel(state.tab)}」還沒有分組。按上方的「新增分組」建立分組，或把其他分頁的分組標題拖到這個分頁上。`;
+  if (state.tab === ALL_TAB) return '還沒有代碼。按上方的「新增代碼」加入標的，或按「新增分組」建立分組。';
+  return `「${tabLabel(state.tab)}」還沒有代碼。按上方的「新增代碼」加入標的，或把其他分頁的分組標題拖到這個分頁上。`;
 }
 
 function renderStatus() {
@@ -1139,33 +1247,15 @@ function tabEditor(tabId) {
     onSubmit: (name) => renameTab(tabId, name),
     onCancel: stopTabEditing,
   });
-  if (tabId !== ALL_TAB) {
-    parts.push(
-      iconButton(
-        'trash',
-        `刪除「${tabLabel(tabId)}」分頁`,
-        () => {
-          state.editingTab = null;
-          state.confirmingTabDelete = tabId;
-          renderTabs();
-        },
-        'tab-delete',
-      ),
-    );
-  }
   return el('span', { class: 'tab-current' }, ...parts);
 }
 
-function tabDeleteConfirm(tabId) {
-  const count = state.groups.filter((group) => group.tabId === tabId).length;
-  const keep = count > 0 ? `裡面的 ${count} 個分組會留在「${tabLabel(ALL_TAB)}」。` : '';
-  return el(
-    'div',
-    { class: 'confirm' },
-    el('span', {}, `刪除「${tabLabel(tabId)}」分頁？${keep}`),
-    el('button', { type: 'button', class: 'text-button danger', onclick: () => deleteTab(tabId) }, '刪除'),
-    el('button', { type: 'button', class: 'text-button', onclick: stopTabEditing }, '取消'),
-  );
+function confirmTabDelete(tabId) {
+  const count = state.groups.filter((group) => group.tabId === tabId && !group.loose).length;
+  const loose = looseGroup(state.groups, tabId)?.symbols.length ?? 0;
+  const parts = [count > 0 ? `${count} 個分組` : '', loose > 0 ? `${loose} 個未分組代碼` : ''].filter(Boolean);
+  const keep = parts.length > 0 ? `裡面的 ${parts.join('、')}會留在「${tabLabel(ALL_TAB)}」。` : '';
+  confirmDelete(`刪除「${tabLabel(tabId)}」分頁？${keep}`, () => deleteTab(tabId));
 }
 
 // Drop a group header on a tab to move the group there.
@@ -1190,20 +1280,27 @@ function makeTabDropTarget(button, tabId) {
   });
 }
 
+// A custom tab has an x that deletes it. The all tab cannot be deleted.
 function tabButton(tabId) {
-  const button = el(
-    'button',
-    {
-      type: 'button',
-      class: 'tab',
-      'aria-pressed': String(tabId === state.tab),
-      dataset: { tab: tabId },
-      onclick: () => selectTab(tabId),
-    },
-    tabLabel(tabId),
+  const current = tabId === state.tab;
+  const item = el(
+    'span',
+    { class: current ? 'tab-item current' : 'tab-item' },
+    el(
+      'button',
+      {
+        type: 'button',
+        class: 'tab',
+        'aria-pressed': String(current),
+        dataset: { tab: tabId },
+        onclick: () => selectTab(tabId),
+      },
+      tabLabel(tabId),
+    ),
+    tabId === ALL_TAB ? null : iconButton('close', `刪除「${tabLabel(tabId)}」分頁`, () => confirmTabDelete(tabId), 'tab-close'),
   );
-  makeTabDropTarget(button, tabId);
-  return button;
+  makeTabDropTarget(item, tabId);
+  return item;
 }
 
 // The pencil and the + stay at the right end, so a tab click never moves the tabs.
@@ -1236,10 +1333,6 @@ function tabActions() {
 
 function renderTabs() {
   const nav = document.getElementById('market-tabs');
-  if (state.confirmingTabDelete) {
-    nav.replaceChildren(tabDeleteConfirm(state.confirmingTabDelete));
-    return;
-  }
   const items = allTabIds().map((id) => (state.editingTab === id ? tabEditor(id) : tabButton(id)));
   if (state.creatingTab) {
     items.push(
@@ -1270,7 +1363,6 @@ function applyTabs({ names, custom }) {
   const ids = allTabIds();
   if (!ids.includes(state.tab)) state.tab = ALL_TAB;
   if (!ids.includes(state.editingTab)) state.editingTab = null;
-  if (!ids.includes(state.confirmingTabDelete)) state.confirmingTabDelete = null;
 }
 
 function applyColumnWidths(widths) {

@@ -61,9 +61,9 @@ test('saveGroups removes a deleted group and keeps the tabs', async () => {
 test('a new install has one custom tab, and tabs can be saved', async () => {
   install({});
   const first = await loadTabs();
-  assert.deepEqual(first, { names: {}, custom: [{ id: 'tab1', name: '分頁1' }] });
+  assert.deepEqual(first, { names: {}, custom: [{ id: 'tab1', name: '分頁一' }] });
   first.custom.push({ id: 'x9', name: '改到的' });
-  assert.deepEqual((await loadTabs()).custom, [{ id: 'tab1', name: '分頁1' }]);
+  assert.deepEqual((await loadTabs()).custom, [{ id: 'tab1', name: '分頁一' }]);
   const tabs = { names: { all: '總覽' }, custom: [{ id: 'x1', name: '短線' }] };
   await saveTabs(tabs);
   assert.deepEqual(await loadTabs(), tabs);
@@ -89,7 +89,7 @@ test('column widths stay on this computer', async () => {
 });
 
 test('syncUsage finds a group too large for one sync item, and counts every item', () => {
-  const tabs = { names: {}, custom: [{ id: 'tab1', name: '分頁1' }] };
+  const tabs = { names: {}, custom: [{ id: 'tab1', name: '分頁一' }] };
   const small = group('a');
   const usage = syncUsage([small], tabs);
   const expected = ['groupOrder["a"]', `tabNames{}`, `customTabs${JSON.stringify(tabs.custom)}`, `group:a${JSON.stringify(small)}`]

@@ -4,12 +4,15 @@ import {
   addSymbol,
   ALL_TAB,
   createGroup,
+  createLooseGroup,
   groupInTab,
+  looseGroup,
   moveGroup,
   moveGroupToTab,
   moveSymbol,
   releaseGroups,
   removeSymbol,
+  showsHeader,
   visibleSymbolIds,
 } from '../extension/lib/groups.js';
 
@@ -147,4 +150,69 @@ test('releaseGroups keeps the groups of a deleted tab and only those', () => {
   assert.equal('tabId' in a, false);
   assert.equal(b.tabId, 'x2');
   assert.equal(groups.length, 2);
+});
+
+test('each tab has its own loose group, with an id that comes from the tab', () => {
+  const all = createLooseGroup(ALL_TAB);
+  const x1 = createLooseGroup('x1');
+  assert.equal(all.loose, true);
+  assert.equal('tabId' in all, false);
+  assert.equal(x1.tabId, 'x1');
+  // Two computers make the same id, so sync keeps one item.
+  assert.equal(createLooseGroup('x1').id, x1.id);
+  assert.notEqual(all.id, x1.id);
+  const groups = [createGroup('A'), all, x1];
+  assert.equal(looseGroup(groups, ALL_TAB), all);
+  assert.equal(looseGroup(groups, 'x1'), x1);
+  assert.equal(looseGroup(groups, 'x2'), undefined);
+});
+
+test('a tab shows its own loose symbols without a header, and the all tab shows other tabs with one', () => {
+  const all = createLooseGroup(ALL_TAB);
+  const x1 = createLooseGroup('x1');
+  assert.equal(showsHeader(all, ALL_TAB), false);
+  assert.equal(showsHeader(x1, 'x1'), false);
+  assert.equal(showsHeader(x1, ALL_TAB), true);
+  assert.equal(showsHeader(createGroup('A'), ALL_TAB), true);
+});
+
+test('loose symbols without a header are always visible, even if closed on the all tab', () => {
+  const x1 = createLooseGroup('x1');
+  x1.symbols = [BTC];
+  x1.collapsed = true;
+  assert.deepEqual(visibleSymbolIds([x1], 'x1'), [BTC.id]);
+  assert.deepEqual(visibleSymbolIds([x1], ALL_TAB), []);
+  x1.collapsed = false;
+  assert.deepEqual(visibleSymbolIds([x1], ALL_TAB), [BTC.id]);
+});
+
+test('releaseGroups moves the loose symbols of a deleted tab to the all tab', () => {
+  const group = createGroup('A');
+  group.tabId = 'x1';
+  const x1 = createLooseGroup('x1');
+  x1.symbols = [BTC, AAPL];
+  const all = createLooseGroup(ALL_TAB);
+  all.symbols = [AAPL];
+  const groups = [group, x1, all];
+  releaseGroups(groups, 'x1');
+  assert.equal(looseGroup(groups, 'x1'), undefined);
+  assert.deepEqual(all.symbols, [AAPL, BTC]);
+  assert.equal('tabId' in group, false);
+  assert.equal(groups.length, 2);
+});
+
+test('releaseGroups makes the loose group of the all tab if it does not exist', () => {
+  const x1 = createLooseGroup('x1');
+  x1.symbols = [TSMC];
+  const groups = [createGroup('A'), x1];
+  releaseGroups(groups, 'x1');
+  assert.deepEqual(looseGroup(groups, ALL_TAB).symbols, [TSMC]);
+  assert.equal(groups.length, 2);
+});
+
+test('releaseGroups drops an empty loose group of a deleted tab', () => {
+  const groups = [createGroup('A'), createLooseGroup('x1')];
+  releaseGroups(groups, 'x1');
+  assert.equal(groups.length, 1);
+  assert.equal(looseGroup(groups, ALL_TAB), undefined);
 });

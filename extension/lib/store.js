@@ -53,7 +53,7 @@ export function syncUsage(groups, { names, custom }) {
 // show the same tab.
 export async function loadTabs() {
   const data = await chrome.storage.sync.get([TAB_NAMES_KEY, CUSTOM_TABS_KEY]);
-  return { names: data[TAB_NAMES_KEY] ?? {}, custom: data[CUSTOM_TABS_KEY] ?? [{ id: 'tab1', name: '分頁1' }] };
+  return { names: data[TAB_NAMES_KEY] ?? {}, custom: data[CUSTOM_TABS_KEY] ?? [{ id: 'tab1', name: '分頁一' }] };
 }
 
 export async function saveTabs({ names, custom }) {
