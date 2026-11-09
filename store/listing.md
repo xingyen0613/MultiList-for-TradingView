@@ -25,7 +25,7 @@ TradingView 使用者的 Chrome 側邊欄觀察清單。分組數量沒有限制
 • 分組數量沒有限制，同一個代碼可以放進多個分組。
 • 用代碼或公司名稱（中文或英文）搜尋，結果來自 TradingView 搜尋。
 • 一鍵匯入 TradingView 觀察清單：每個清單變成一個分頁，每個區段變成一個分組。
-• 顯示台股（上市、上櫃）、美股、歐股、幣安現貨與永續合約的最新價、漲跌、漲跌幅。
+• 顯示台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安現貨與永續合約的最新價、漲跌、漲跌幅。
 • 用分頁整理分組；拖曳調整順序。
 • 清單透過 Chrome 帳號同步。可選的 Google 登入，能把清單同步到其他瀏覽器，例如 Edge。
 • 匯出與匯入 JSON 檔，用來備份、搬家或分享。
@@ -45,7 +45,7 @@ Features
 • Unlimited groups. The same symbol can be in many groups.
 • Search by ticker or company name. Results come from TradingView search.
 • Import your TradingView watchlists in one click: each list becomes a tab, and each section becomes a group.
-• Last price, change and change % for Taiwan, US and European stocks, and Binance spot and perpetual markets.
+• Last price, change and change % for Taiwan, US, European and Korean stocks (KOSPI, KOSDAQ), and Binance spot and perpetual markets.
 • Organize groups in tabs, and drag to reorder.
 • Lists sync through your Chrome account. Optional Google sign-in syncs them to other browsers, such as Edge.
 • Export and import a JSON file to back up, move or share a list.
