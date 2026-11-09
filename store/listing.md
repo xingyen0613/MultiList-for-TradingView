@@ -111,23 +111,59 @@ This is an independent project. It is not affiliated with, endorsed by, or conne
 
 ## Privacy practices
 
+Each block below is one field on the dashboard's Privacy practices tab. Checked against the code on 2026-11-10 (`background.js`, `sidepanel.js`, `lib/account.js`, `lib/chart-page.js`, `lib/quotes.js`, `lib/store.js`, `lib/upload.js`).
+
 **Single purpose**:
 
 ```
-Show the user's own watchlist of market symbols in Chrome's side panel, with quotes, and switch the TradingView chart to the selected symbol.
+MultiList shows the user's own watchlists of market symbols in the browser side panel, with quotes, and switches the open TradingView chart to the symbol the user clicks. Optional Google sign-in keeps the same watchlists in sync between the user's browsers.
 ```
 
-**Permission justifications**:
+**alarms**:
 
-| Permission | Justification |
-|---|---|
-| `sidePanel` | The watchlist is shown in Chrome's side panel. |
-| `storage` | Saves the user's groups, tabs and settings, and syncs them through the user's Chrome account. |
-| `scripting` | Runs TradingView's own symbol search and chart switch in the user's open TradingView tab, and reads the user's TradingView watchlists when the user presses Import. |
-| `alarms` | Wakes the background page every 4 hours to sync the list for signed-in users and to send anonymous sharing data once a week when the user agreed. |
-| `identity` | Optional Google sign-in (`chrome.identity.launchWebAuthFlow`) to sync the list between the user's browsers. |
-| Host `*.tradingview.com` | Symbol search, chart switch and watchlist import in the user's TradingView tab. |
-| Host `mis.twse.com.tw`, `query1.finance.yahoo.com`, `data-api.binance.vision`, `fapi.binance.com`, `api.fugle.tw`, `data.alpaca.markets` | Quote requests for the symbols in the user's list. |
+```
+One repeating alarm (every 4 hours) wakes the background service worker. For a signed-in user, it syncs the watchlists with the user's cloud copy. If the user agreed to anonymous sharing, it sends the anonymous upload when 7 days have passed since the last one. With no sign-in and no consent, the alarm does nothing.
+```
+
+**identity**:
+
+```
+Used only for the optional Google sign-in. When the user clicks "Sign in with Google", chrome.identity.launchWebAuthFlow opens Google's sign-in page (scopes: openid, email). The sign-in lets MultiList sync the user's watchlists between the user's browsers. All list features work without sign-in, and identity is not used for anything else.
+```
+
+**scripting**:
+
+```
+Used only on the user's open https://*.tradingview.com/ tabs, and only after a user action:
+1. When the user clicks a symbol, it switches the chart through the page's own symbol search, so unsaved indicators on the chart are kept.
+2. When the user types in the add-symbol box, it runs TradingView's symbol search from the TradingView tab.
+3. When the user presses Import, it reads the user's TradingView watchlists so they can be added to MultiList.
+The injected functions are part of the extension package. No remote code is run.
+```
+
+**sidePanel**:
+
+```
+The whole interface of MultiList is a side panel. The sidePanel permission sets the panel page and opens it when the user clicks the toolbar icon (setPanelBehavior with openPanelOnActionClick).
+```
+
+**storage**:
+
+```
+chrome.storage.sync keeps the user's watchlists (tabs, groups, symbols) and settings, so they follow the user's browser account. chrome.storage.local keeps data that stays on this device: the sign-in session, the optional Fugle and Alpaca API keys that the user enters, column widths, the last open tab, and the change log for anonymous sharing.
+```
+
+**Host permissions** (one field for all sites):
+
+```
+- *.tradingview.com: to find the user's open TradingView tabs and run the chart switch, symbol search and watchlist import described under scripting.
+- mis.twse.com.tw: quotes for Taiwan stocks.
+- api.fugle.tw: Taiwan stock quotes, only if the user enters their own Fugle API key.
+- query1.finance.yahoo.com: quotes for US, European and Korean stocks.
+- data.alpaca.markets: US stock quotes, only if the user enters their own Alpaca API key.
+- data-api.binance.vision and fapi.binance.com: quotes for crypto spot pairs and perpetual futures.
+Quote requests contain only the symbols in the user's list, plus the user's own key for Fugle or Alpaca.
+```
 
 **Remote code**: No, I am not using remote code.
 
