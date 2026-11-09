@@ -65,6 +65,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     );
     return true;
   }
+  if (message?.type === 'deleteAccount') {
+    sync.deleteAccount().then(
+      () => sendResponse({ ok: true }),
+      (error) => sendResponse({ ok: false, reason: error?.reason === 'expired' ? 'expired' : 'failed' }),
+    );
+    return true;
+  }
   if (message?.type === 'panelOpened') {
     upload();
     pull();

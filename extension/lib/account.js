@@ -124,6 +124,49 @@ export async function signOut({ storage = chrome.storage, fetchFn = fetch, serve
   }
 }
 
+// Thrown by deleteAccount; reason is 'expired' (the server no longer knows this session) or 'failed'.
+export class AccountDeleteError extends Error {
+  constructor(reason) {
+    super(`account delete ${reason}`);
+    this.name = 'AccountDeleteError';
+    this.reason = reason;
+  }
+}
+
+// Local keys that only make sense while signed in to the deleted account.
+const DELETED_KEYS = [ACCOUNT_KEY, 'cloudSync', 'syncStatus', 'syncChoice', EXPIRED_KEY];
+
+// Asks the server to delete the account and its cloud list. The local state changes only on an
+// answer: a network error leaves everything as it was, so the user can try again. The list in
+// storage.sync is never touched, so it stays on this computer and in Chrome sync.
+export async function deleteAccount({ storage = chrome.storage, fetchFn = fetch, serverUrl = SERVER_URL } = {}) {
+  const account = await loadAccount(storage);
+  if (!account || !serverUrl) throw new AccountDeleteError('expired');
+  let response;
+  try {
+    response = await fetchFn(`${serverUrl}/v1/account`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${account.token}` },
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    throw new AccountDeleteError('failed');
+  }
+  if (response.status === 200) {
+    await storage.local.remove(DELETED_KEYS);
+    return;
+  }
+  if (response.status === 401) {
+    // Same as a sync that finds the session gone; the record stays, so signing in again merges quietly.
+    if ((await loadAccount(storage))?.token === account.token) {
+      await storage.local.set({ [EXPIRED_KEY]: true });
+      await storage.local.remove(ACCOUNT_KEY);
+    }
+    throw new AccountDeleteError('expired');
+  }
+  throw new AccountDeleteError('failed');
+}
+
 export async function loadAccount(storage = chrome.storage) {
   const data = await storage.local.get(ACCOUNT_KEY);
   return data[ACCOUNT_KEY] ?? null;

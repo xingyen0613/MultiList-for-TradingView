@@ -499,3 +499,55 @@ test('flush pushes a waiting edit at once and cancels its timer', async () => {
   await t.engine.whenIdle();
   assert.equal(t.server.calls.length, 1);
 });
+
+test('deleteAccount cancels the waiting push, deletes in the queue, and later steps send nothing', async () => {
+  const t = setup({ local: LIST, cloud: LIST, cloudVersion: 2, record: recordOf(2, LIST) });
+  const deleted = [];
+  const fetchCalls = t.server.calls;
+  const origFetch = t.server.fetch;
+  // The real server answers DELETE /v1/account; here the fake only needs to record it.
+  const engine = createSync({
+    storage: t.storage,
+    fetchFn: async (url, init) => {
+      if (init.method === 'DELETE') {
+        deleted.push(url);
+        return { status: 200 };
+      }
+      return origFetch(url, init);
+    },
+    serverUrl: 'http://s',
+    now: t.timers.now,
+    locks: t.locks,
+    setTimeout: t.timers.setTimeout,
+    clearTimeout: t.timers.clearTimeout,
+  });
+  t.edit(doc(group('g2', [BTC])));
+  engine.schedulePush();
+  assert.equal(t.timers.count(), 1);
+  const removal = engine.deleteAccount();
+  assert.equal(t.timers.count(), 0);
+  // Queued behind the delete: both find no account.
+  const later = engine.syncNow();
+  engine.schedulePush();
+  t.timers.advance(3000);
+  await removal;
+  assert.equal(await later, false);
+  await engine.whenIdle();
+  assert.deepEqual(deleted, ['http://s/v1/account']);
+  assert.deepEqual(fetchCalls, []);
+  assert.equal(t.storage.local.data.account, undefined);
+  assert.equal(t.storage.local.data.cloudSync, undefined);
+  assert.equal(t.storage.local.data.syncStatus, undefined);
+  assert.ok(docsEqual(t.localDoc(), doc(group('g2', [BTC]))));
+});
+
+test('deleteAccount rejects with the reason and leaves the account when the request fails', async () => {
+  const t = setup({ local: LIST, cloud: LIST, cloudVersion: 2, record: recordOf(2, LIST) });
+  const engine = createSync({
+    storage: t.storage, fetchFn: async () => { throw new TypeError('Failed to fetch'); }, serverUrl: 'http://s',
+    now: t.timers.now, locks: t.locks, setTimeout: t.timers.setTimeout, clearTimeout: t.timers.clearTimeout,
+  });
+  await assert.rejects(engine.deleteAccount(), { reason: 'failed' });
+  assert.deepEqual(t.storage.local.data.account, ACCOUNT);
+  assert.ok(t.storage.local.data.cloudSync);
+});

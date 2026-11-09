@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildAuthUrl,
+  AccountDeleteError,
   codeChallenge,
+  deleteAccount,
   isSignInAvailable,
   loadAccount,
   parseRedirect,
@@ -22,8 +24,8 @@ function fakeArea(initial = {}) {
     async set(items) {
       Object.assign(data, structuredClone(items));
     },
-    async remove(key) {
-      delete data[key];
+    async remove(keys) {
+      for (const key of [keys].flat()) delete data[key];
     },
   };
 }
@@ -163,4 +165,55 @@ test('signOut clears the account even when the server fails', async () => {
     await signOut({ storage, serverUrl: 'http://s', fetchFn });
     assert.equal(await loadAccount(storage), null);
   }
+});
+
+const SIGNED_IN = {
+  account: { email: 'a@b.c', token: 't1', accountId: 'x' },
+  cloudSync: { accountId: 'x', version: 2, base: {} },
+  syncStatus: { state: 'ok', at: 1 },
+  syncChoice: { local: {}, cloud: {} },
+  signInExpired: true,
+  other: 'kept',
+};
+
+async function deleteWith(fetchFn, initial = SIGNED_IN) {
+  const storage = { local: fakeArea(initial) };
+  const calls = [];
+  let error = null;
+  await deleteAccount({ storage, serverUrl: 'http://s', fetchFn: async (url, init) => (calls.push({ url, init }), fetchFn()) })
+    .catch((e) => { error = e; });
+  return { storage, calls, error };
+}
+
+test('deleteAccount sends DELETE with the token and a timeout, then clears the sign-in state', async () => {
+  const { storage, calls, error } = await deleteWith(async () => ({ status: 200 }));
+  assert.equal(error, null);
+  assert.equal(calls[0].url, 'http://s/v1/account');
+  assert.equal(calls[0].init.method, 'DELETE');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer t1');
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.deepEqual(storage.local.data, { other: 'kept' });
+});
+
+test('deleteAccount on 401 signs out as expired and keeps the sync record', async () => {
+  const { storage, error } = await deleteWith(async () => ({ status: 401 }));
+  assert.ok(error instanceof AccountDeleteError);
+  assert.equal(error.reason, 'expired');
+  assert.equal(storage.local.data.account, undefined);
+  assert.equal(storage.local.data.signInExpired, true);
+  assert.deepEqual(storage.local.data.cloudSync, SIGNED_IN.cloudSync);
+});
+
+test('deleteAccount changes nothing after a network error or another status', async () => {
+  for (const fetchFn of [async () => { throw new Error('offline'); }, async () => ({ status: 500 }), async () => ({ status: 404 })]) {
+    const { storage, error } = await deleteWith(fetchFn);
+    assert.equal(error.reason, 'failed');
+    assert.deepEqual(storage.local.data, SIGNED_IN);
+  }
+});
+
+test('deleteAccount with no stored session sends nothing and reports expired', async () => {
+  const { calls, error } = await deleteWith(async () => ({ status: 200 }), {});
+  assert.equal(calls.length, 0);
+  assert.equal(error.reason, 'expired');
 });

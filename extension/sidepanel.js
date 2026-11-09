@@ -96,6 +96,7 @@ const state = {
   account: null,
   signingIn: false,
   signInExpired: false,
+  deleting: false,
   syncStatus: null,
   syncChoice: null,
 };
@@ -1314,6 +1315,10 @@ function renderAccount() {
   text.classList.toggle('expired', expired);
   button.textContent = account ? '登出' : '登入';
   button.onclick = account ? startSignOut : showSignInDialog;
+  const deleteButton = document.getElementById('account-delete');
+  deleteButton.hidden = !account;
+  deleteButton.disabled = state.deleting;
+  deleteButton.onclick = showDeleteAccountDialog;
   if (!account) topbar.prepend(iconButton('cloud', SIGN_IN_LABEL, showSignInDialog, 'signin-button'));
 }
 
@@ -1322,6 +1327,36 @@ async function startSignOut() {
   const flushed = saveQueue.then(() => chrome.runtime.sendMessage({ type: 'flushSync' })).catch(() => {});
   await Promise.race([flushed, new Promise((done) => setTimeout(done, FLUSH_WAIT_MS))]);
   await signOut();
+}
+
+const DELETE_ERRORS = { expired: '登入已過期，請重新登入後再刪除', failed: '刪除失敗，請稍後再試' };
+
+// The focus starts on 取消, so a quick Enter does not delete.
+function showDeleteAccountDialog() {
+  if (state.deleting) return;
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '刪除帳號？'),
+      el('p', {}, '雲端上的清單和帳號資料會永久刪除，無法復原。這台電腦上的清單會保留。其他已登入的瀏覽器會被登出。'),
+    ],
+    actions: [{ label: '取消' }, { label: '刪除帳號', className: 'danger', onClick: startDeleteAccount }],
+  });
+}
+
+// The background runs the delete in the sync queue. On success the stored session is gone and the
+// storage listener redraws the section; the buttons stay off until the answer comes back.
+async function startDeleteAccount() {
+  state.deleting = true;
+  state.notice = '';
+  renderAccount();
+  try {
+    const answer = await chrome.runtime.sendMessage({ type: 'deleteAccount' }).catch(() => null);
+    if (!answer?.ok) state.notice = DELETE_ERRORS[answer?.reason] ?? DELETE_ERRORS.failed;
+  } finally {
+    state.deleting = false;
+    renderAccount();
+    renderStatus();
+  }
 }
 
 let choiceDialog = null;

@@ -4,7 +4,7 @@
 // The record { accountId, version, base } is the cloud copy that the local list last agreed with:
 // what differs from base is a local edit, and a newer cloud version holds edits made elsewhere.
 
-import { loadAccount } from './account.js';
+import { deleteAccount as deleteAccountOnServer, loadAccount } from './account.js';
 import { SERVER_URL } from './config.js';
 import {
   countDoc,
@@ -291,6 +291,16 @@ export function createSync({
     return enqueue(() => task((account) => applyChoice(account, choice)));
   }
 
+  // The waiting push is dropped, and the delete runs in the queue, so no sync step writes cloudSync
+  // or pushes to the deleted account afterwards: the steps behind it find no account.
+  function deleteAccount() {
+    if (pushTimer !== null) {
+      stopTimer(pushTimer);
+      pushTimer = null;
+    }
+    return enqueue(() => deleteAccountOnServer({ storage, fetchFn, serverUrl }));
+  }
+
   async function whenIdle() {
     let last;
     do {
@@ -309,5 +319,5 @@ export function createSync({
     await whenIdle();
   }
 
-  return { syncNow, schedulePush, requestPull, choose, flush, whenIdle };
+  return { syncNow, schedulePush, requestPull, choose, flush, deleteAccount, whenIdle };
 }
