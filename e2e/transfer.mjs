@@ -1,4 +1,4 @@
-// Real-browser check of the list export and import in the settings: the download, picking the
+// Real-browser check of the list export and import in the menu: the download, picking the
 // file again, what lands in chrome.storage.sync, and files that must change nothing.
 // Run: node e2e/transfer.mjs   (setup and requirements: e2e/harness.mjs)
 
@@ -51,26 +51,44 @@ const seed = {
   'group:g3': { id: 'g3', name: '幣', collapsed: false, symbols: [{ id: 'BINANCE:BTCUSDT', name: '' }] },
 };
 
+const menuItem = async (page, name) => {
+  await page.locator('#menu-button').click();
+  await page.getByRole('menuitem', { name, exact: true }).click();
+};
+const messages = (page) => page.locator('#message-bar .message');
+// Closes every message that can be closed, so the next one is the answer to the next action.
+// A quote-source error has no close button and is not an answer to an import.
+const closeButtons = (page) => page.locator('#message-bar').getByRole('button', { name: '關閉訊息' });
+async function clearMessages(page) {
+  while ((await closeButtons(page).count()) > 0) await closeButtons(page).first().click();
+}
+
 let downloads = 0;
 async function exportFile(page, scope) {
-  await page.getByLabel(scope, { exact: true }).check();
-  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export-button').click()]);
+  await clearMessages(page);
+  await menuItem(page, '匯出檔案…');
+  const dialog = page.locator('dialog', { hasText: '匯出觀察清單' });
+  await dialog.getByRole('radio', { name: new RegExp(scope) }).check();
+  const [download] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: '匯出' }).click()]);
   downloads += 1;
   const path = join(files, `${downloads}-${download.suggestedFilename()}`);
   await download.saveAs(path);
   return { name: download.suggestedFilename(), data: JSON.parse(await readFile(path, 'utf8')), path };
 }
 
-// Picks a file through the import button, like a user, and waits for the message under it.
+// Picks a file through the menu, the popup and the file chooser, like a user, and waits for the
+// message in the message bar: an error is a .problem, a result is an .info.
 async function importFile(page, path) {
-  await page.evaluate(() => {
-    document.getElementById('transfer-message').textContent = '';
-  });
-  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('#import-button').click()]);
+  await clearMessages(page);
+  await menuItem(page, '從檔案匯入…');
+  const dialog = page.locator('dialog', { hasText: '從檔案匯入' });
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), dialog.getByRole('button', { name: '選擇檔案' }).click()]);
   await chooser.setFiles(path);
-  const message = page.locator('#transfer-message');
-  assert.ok(await waitFor(async () => (await message.textContent()) !== ''), 'no message after the import');
-  return { text: await message.textContent(), isError: await message.evaluate((node) => node.classList.contains('error')) };
+  // An import error is a closable .problem; a result is an .info.
+  assert.ok(await waitFor(async () => (await closeButtons(page).count()) > 0), 'no message after the import');
+  const problem = page.locator('#message-bar .message.problem').filter({ has: page.getByRole('button', { name: '關閉訊息' }) });
+  const isError = (await problem.count()) > 0;
+  return { text: await (isError ? problem : page.locator('#message-bar .message.info')).first().textContent(), isError };
 }
 
 async function writeJson(name, data) {
@@ -91,7 +109,6 @@ try {
   await page.goto(panelUrl);
   // Consent is on, so the check can see that an import is recorded as list changes.
   await page.getByRole('button', { name: '同意', exact: true }).click();
-  await page.locator('#settings summary').click();
 
   let whole;
   await step('exporting the whole list downloads multilist-YYYYMMDD.json with names, symbols and Yahoo tickers', async () => {
@@ -114,20 +131,26 @@ try {
       { name: '', loose: true, symbols: [{ id: 'NASDAQ:AAPL', name: 'Apple' }] },
       { name: '幣', symbols: [{ id: 'BINANCE:BTCUSDT', name: '' }] },
     ]);
-    assert.match(await page.locator('#transfer-message').textContent(), /已匯出 multilist-\d{8}\.json/);
+    assert.match(await page.locator('#message-bar .message.info').textContent(), /已匯出 multilist-\d{8}\.json/);
   });
 
   let oneTab;
   await step('exporting the current tab has only that tab', async () => {
     await page.locator('#market-tabs button.tab[data-tab="tab2"]').click();
-    oneTab = await exportFile(page, '目前分頁');
+    oneTab = await exportFile(page, '目前分頁（歐股）');
     assert.deepEqual(oneTab.data.tabs.map((tab) => tab.name), ['歐股']);
     assert.deepEqual(oneTab.data.groups, []);
   });
 
-  await step('on the all tab, the current tab export is the whole list', async () => {
+  await step('on the all tab, 目前分頁 is disabled and only the whole list can be exported', async () => {
     await page.locator('#market-tabs button.tab[data-tab="all"]').click();
-    const all = await exportFile(page, '目前分頁');
+    await menuItem(page, '匯出檔案…');
+    const dialog = page.locator('dialog', { hasText: '匯出觀察清單' });
+    assert.equal(await dialog.getByRole('radio', { name: /目前分頁/ }).isDisabled(), true);
+    assert.equal(await dialog.getByRole('radio', { name: /整份清單/ }).isChecked(), true);
+    await dialog.getByRole('button', { name: '取消' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    const all = await exportFile(page, '整份清單');
     assert.deepEqual(all.data.tabs, whole.data.tabs);
     assert.deepEqual(all.data.groups, whole.data.groups);
   });

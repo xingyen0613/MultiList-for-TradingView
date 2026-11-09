@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>觀察清單</title>
     <link rel="stylesheet" href="sidepanel.css" />
+    <script src="theme-boot.js"></script>
   </head>
   <body>
     <header class="topbar">
       <h1>觀察清單</h1>
-      <div id="topbar-actions"></div>
+      <div id="topbar-actions">
+        <span id="signin-hint" class="tip-anchor" hidden>
+          <button id="signin-button" type="button" class="icon-button cloud-alert" aria-label="登入以同步觀察清單" aria-describedby="signin-tip"></button>
+          <span id="signin-tip" class="tip tip-below" role="tooltip"></span>
+        </span>
+        <button id="menu-button" type="button" class="icon-button" popovertarget="menu" aria-label="設定選單" aria-haspopup="menu"></button>
+      </div>
     </header>
+    <div id="menu" class="menu" popover role="menu" aria-label="設定選單"></div>
 
     <nav id="market-tabs" class="tabs" aria-label="分頁"></nav>
 
@@ -23,55 +31,19 @@
 
     <main id="groups"></main>
 
+    <div id="message-bar"></div>
     <footer class="statusbar">
-      <p id="status-error" class="status-error"></p>
-      <p id="status"></p>
-      <details id="settings">
-        <summary>設定</summary>
-        <div id="account-setting" hidden>
-          <p class="setting-title">帳號</p>
-          <p id="account-text" class="hint"></p>
-          <div class="transfer-row">
-            <button id="account-button" type="button" class="text-button"></button>
-            <button id="account-delete" type="button" class="text-button danger" hidden>刪除帳號</button>
-          </div>
-        </div>
-        <div id="sharing-setting">
-          <label class="check-row"><input id="sharing-toggle" type="checkbox" />匿名分享觀察清單</label>
-          <p class="hint">
-            關閉後停止上傳，已上傳的資料不會刪除。
-            <a id="sharing-privacy" target="_blank" rel="noopener">隱私權政策</a>
-          </p>
-        </div>
-        <div id="transfer-setting">
-          <p class="setting-title">備份與分享</p>
-          <div class="transfer-row" role="radiogroup" aria-label="匯出範圍">
-            <span>匯出範圍</span>
-            <label class="check-row"><input type="radio" name="export-scope" value="all" checked />整份清單</label>
-            <label class="check-row"><input type="radio" name="export-scope" value="tab" />目前分頁</label>
-          </div>
-          <div class="transfer-row">
-            <button id="export-button" type="button" class="text-button">匯出檔案</button>
-            <button id="import-button" type="button" class="text-button">從檔案匯入</button>
-            <input id="import-file" type="file" accept=".json,application/json" hidden />
-          </div>
-          <p class="hint">匯出的 JSON 檔可以備份，或分享給別人匯入。匯入會加在現有清單後面，不會蓋掉任何東西。</p>
-          <p id="transfer-message" class="hint" role="status"></p>
-        </div>
-        <form id="keys-form">
-          <p class="hint">
-            沒有 key 時，台股用 TWSE MIS，美股用 Yahoo。Key 只存在這台電腦，不會同步。
-          </p>
-          <label>Fugle API key<input id="key-fugle" type="password" autocomplete="off" /></label>
-          <label>Alpaca Key ID<input id="key-alpaca-id" type="password" autocomplete="off" /></label>
-          <label>Alpaca Secret<input id="key-alpaca-secret" type="password" autocomplete="off" /></label>
-          <div class="form-actions">
-            <button type="submit" class="text-button primary">儲存</button>
-            <span id="keys-saved" class="hint" role="status"></span>
-          </div>
-        </form>
-      </details>
+      <span id="app-version"></span>
+      <span aria-hidden="true">·</span>
+      <a id="privacy-link" target="_blank" rel="noopener">隱私權政策</a>
+      <span aria-hidden="true">·</span>
+      <a class="contact" href="mailto:xingyen0613@gmail.com">xingyen0613@gmail.com</a>
+      <span id="update-info" class="tip-anchor" hidden>
+        <span id="update-time" tabindex="0" aria-describedby="source-tip"></span>
+        <span id="source-tip" class="tip tip-above" role="tooltip"></span>
+      </span>
     </footer>
+    <input id="import-file" type="file" accept=".json,application/json" hidden />
 
     <script type="module" src="sidepanel.js"></script>
   </body>

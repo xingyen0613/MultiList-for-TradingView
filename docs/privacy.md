@@ -13,6 +13,7 @@ The extension has two optional features that send data to our server: Google sig
 - Your groups, tabs, and symbols are stored in Chrome's sync storage. They sync with your browser account.
 - The date you started using the extension is stored in Chrome's sync storage. It is sent to our server only if you sign in.
 - Your sharing choice, the anonymous analytics ID, and the salt for hashing (section 4) are stored in Chrome's sync storage.
+- The background and text colors you pick are stored in Chrome's sync storage.
 - Your API keys are stored only on your device. They are never sent to our servers.
 - If you agree to share, the list changes that are not uploaded yet are stored on your device.
 - If you sign in, your sign-in session, your email address, and a copy of the list from the last sync are stored on your device. Signing out removes the session and the email address.
@@ -37,7 +38,7 @@ These services handle that data under their own privacy policies.
 
 ## 3. Optional Google sign-in
 
-Sign-in is optional. Without it, the extension works as usual, and your list syncs only through Chrome sync. If you sign in, your list also syncs through our server to your other browsers, such as Chrome and Edge. Before you sign in, the extension tells you that your list and email address will be stored on our server, and links to this policy.
+Sign-in is optional. Without it, the extension works as usual, and your list syncs only through Chrome sync. If you sign in, your list also syncs through our server to your other browsers, such as Chrome and Edge. Before you sign in, the sign-in window tells you that signing in syncs your list to your other devices and browsers, and links to this policy.
 
 From Google, we receive only your Google account ID and your email address. We do not receive your name, profile photo, password, or any other Google data.
 
@@ -62,7 +63,7 @@ The use of information received from Google APIs complies with the [Google API S
 
 ## 4. Optional anonymous sharing
 
-Sharing is off until you press "同意" (Agree) in the extension's consent window, or turn on "匿名分享觀察清單" (anonymous sharing) in the extension's Settings. You can turn it off at any time in the Settings. It does not depend on sign-in: you can use either one, both, or neither.
+Sharing is off until you press "同意" (Agree) in the extension's consent window, or turn on "匿名分享觀察清單" (anonymous sharing) under "匿名分享" in the "⋯" menu at the top right of the extension. You can turn it off there at any time. It does not depend on sign-in: you can use either one, both, or neither.
 
 If you agree, the extension sends:
 
@@ -105,7 +106,7 @@ The use of data received from the extension complies with the Chrome Web Store U
 
 - Your account data and synced list are kept until you delete your account.
 - Signing out does not delete them.
-- To delete them, open Settings (設定), go to Account (帳號), and press "刪除帳號" (Delete account). This deletes your synced list, your sign-in sessions, and your account data at once. It cannot be undone.
+- To delete them, open the "⋯" menu at the top right of the extension, choose "刪除帳號…" (Delete account), and confirm. This deletes your synced list, your sign-in sessions, and your account data at once. It cannot be undone.
 - Deleted data can stay in our hosting provider's backups for up to 30 days.
 - The list on your device stays. Your other browsers are signed out.
 - You can also ask us to delete your account by email (section 11).

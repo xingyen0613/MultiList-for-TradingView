@@ -52,6 +52,9 @@ try {
 
   await step('the consent dialog opens, firstSeenAt already exists, and nothing is sent before a decision', async () => {
     await pageA.getByText('匿名分享觀察清單？').waitFor({ timeout: 5000 });
+    // No client ID, so no sign-in anywhere: no sign-in popup, no cloud, no account items in the menu.
+    assert.equal(await pageA.locator('dialog', { hasText: '同步你的觀察清單' }).count(), 0);
+    assert.equal(await pageA.locator('#signin-hint').isHidden(), true);
     await sleep(1000);
     assert.equal(stack.seen.POST, 0);
     const firstSeenAt = await worker.evaluate(async () => (await chrome.storage.sync.get('firstSeenAt')).firstSeenAt ?? null);
@@ -130,11 +133,18 @@ try {
     assert.equal(uploads().length, 2);
   });
 
-  await step('turning sharing off in the settings stops recording', async () => {
-    await pageA.locator('#settings summary').click();
-    const toggle = pageA.getByLabel('匿名分享觀察清單');
-    assert.ok(await toggle.isChecked());
-    await toggle.uncheck();
+  await step('turning sharing off in the menu stops recording', async () => {
+    await pageA.locator('#menu-button').click();
+    assert.ok(!/Google|登出|刪除帳號/.test(await pageA.locator('#menu').textContent()), 'the menu has account items');
+    await pageA.getByRole('menuitem', { name: '匿名分享…', exact: true }).click();
+    const toggle = pageA.getByRole('switch', { name: '匿名分享觀察清單' });
+    assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+    await toggle.click();
+    assert.equal(await toggle.getAttribute('aria-checked'), 'false');
+    // Turning it off here does not ask for a second chance.
+    assert.equal(await pageA.getByText('拜託啦～求求了～').count(), 0);
+    await pageA.getByRole('button', { name: '完成' }).click();
+    await pageA.locator('dialog').waitFor({ state: 'detached' });
     assert.ok(await waitFor(async () => (await local('lastUploadAt')) === null), 'upload state was not cleared');
     await removeButton(pageA, 'ETHUSDT').click();
     await sleep(1500);
