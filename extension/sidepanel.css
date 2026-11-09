@@ -592,6 +592,7 @@ input {
   gap: 6px;
 }
 
+#account-setting,
 #transfer-setting {
   display: flex;
   flex-direction: column;
@@ -599,8 +600,13 @@ input {
   padding: 8px 0 6px;
 }
 
+#account-setting p,
 #transfer-setting p {
   margin: 0;
+}
+
+#account-setting[hidden] {
+  display: none;
 }
 
 .setting-title {

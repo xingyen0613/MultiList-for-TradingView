@@ -4,6 +4,8 @@
 // server repo next to this one (MULTILIST_SERVER_DIR=<path> to change it).
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createServer as createHttpServer } from 'node:http';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -60,20 +62,49 @@ export function createSteps() {
   };
 }
 
+const base64url = (buffer) => buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
 // The server checks allowedOrigins on every request, so a check can allow the extension later.
-export async function startStack() {
+// With { google: true } the server gets a fake Google token exchange, and the extension points
+// at a local page that stands in for Google's consent page: it records code_challenge and state,
+// then redirects back with code=test-code and the recorded state (or google.badState).
+export async function startStack({ google = false } = {}) {
   const { chromium } = await import(pathToFileURL(join(findPlaywright(), 'index.mjs')));
   const { createServer } = await import(pathToFileURL(join(serverDir, 'src/server.js')));
   const { createMemoryStore } = await import(pathToFileURL(join(serverDir, 'src/store-memory.js')));
 
   const allowedOrigins = [];
   const store = createMemoryStore();
-  const server = createServer({ store, allowedOrigins });
+  // google.requests: the authorization requests seen; google.exchanges: results of the fake exchange.
+  const googleState = { requests: [], exchanges: [], badState: false };
+  const googleExchange = google
+    ? async ({ code, codeVerifier }) => {
+        const last = googleState.requests.at(-1);
+        const challenge = base64url(createHash('sha256').update(codeVerifier).digest());
+        const ok = code === 'test-code' && last?.code_challenge === challenge;
+        googleState.exchanges.push(ok);
+        if (!ok) throw new Error('PKCE verifier does not match the recorded challenge');
+        return { sub: 'sub-1', email: 'tester@example.com' };
+      }
+    : null;
+  const server = createServer({ store, allowedOrigins, googleExchange });
   const seen = { POST: 0, OPTIONS: 0 };
   server.on('request', (req) => {
     if (req.method in seen) seen[req.method] += 1;
   });
   const serverUrl = `http://localhost:${await listen(server)}`;
+  let googleHttp = null;
+  let googleUrl = '';
+  if (google) {
+    googleHttp = createHttpServer((req, res) => {
+      const params = new URL(req.url, 'http://x').searchParams;
+      googleState.requests.push(Object.fromEntries(params));
+      const state = googleState.badState ? 'not-the-state' : params.get('state');
+      res.writeHead(302, { Location: `${params.get('redirect_uri')}?code=test-code&state=${state}` });
+      res.end();
+    });
+    googleUrl = `http://127.0.0.1:${await listen(googleHttp)}/auth`;
+  }
 
   const work = await mkdtemp(join(tmpdir(), 'multilist-e2e-'));
   const extDir = join(work, 'extension');
@@ -81,7 +112,14 @@ export async function startStack() {
   const configPath = join(extDir, 'lib/config.js');
   const config = await readFile(configPath, 'utf8');
   if (!config.includes("SERVER_URL = '';")) throw new Error('config.js no longer has an empty SERVER_URL');
-  await writeFile(configPath, config.replace("SERVER_URL = '';", `SERVER_URL = '${serverUrl}';`));
+  let patched = config.replace("SERVER_URL = '';", `SERVER_URL = '${serverUrl}';`);
+  if (google) {
+    if (!patched.includes("GOOGLE_CLIENT_ID = '';")) throw new Error('config.js no longer has an empty GOOGLE_CLIENT_ID');
+    patched = patched
+      .replace("GOOGLE_CLIENT_ID = '';", "GOOGLE_CLIENT_ID = 'test-client-id';")
+      .replace(/GOOGLE_AUTH_URL = '[^']*';/, `GOOGLE_AUTH_URL = '${googleUrl}';`);
+  }
+  await writeFile(configPath, patched);
 
   const context = await chromium.launchPersistentContext(join(work, 'profile'), {
     channel: 'chromium',
@@ -99,6 +137,7 @@ export async function startStack() {
     docs,
     allowedOrigins,
     seen,
+    google: googleState,
     serverUrl,
     extDir,
     context,
@@ -108,6 +147,7 @@ export async function startStack() {
     async close() {
       await context.close();
       server.close();
+      googleHttp?.close();
       await rm(work, { recursive: true, force: true });
     },
   };

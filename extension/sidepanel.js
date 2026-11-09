@@ -16,6 +16,7 @@ import {
   visibleSymbolIds,
 } from './lib/groups.js';
 import { diffGroups } from './lib/changes.js';
+import { isSignInAvailable, loadAccount, SignInCancelled, signIn, signOut } from './lib/account.js';
 import { PRIVACY_URL } from './lib/config.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
@@ -57,6 +58,7 @@ const ICONS = {
   chevron: '<path d="M6 9l6 6 6-6"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   import: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  cloud: '<path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5 4.75 4.75 0 0 1 17 18H7z"/>',
 };
 
 // The search keeps its type after a symbol is added, so the next search finds the same kind.
@@ -89,6 +91,8 @@ const state = {
   resolving: false,
   search: emptySearch(),
   importing: null,
+  account: null,
+  signingIn: false,
 };
 
 const groupsContainer = document.getElementById('groups');
@@ -1217,6 +1221,66 @@ function setUpTopbar() {
     .append(iconButton('import', '從 TradingView 匯入名單', startImport));
 }
 
+const SIGN_IN_LABEL = '登入以同步到其他瀏覽器';
+
+// Explains what signing in stores, and only a click on the Google button starts the flow.
+function showSignInDialog() {
+  if (state.signingIn) return;
+  const privacyLink = el('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, '隱私權政策');
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '登入以同步清單'),
+      el('p', {}, '登入後，你的清單（含分組名稱）和 Google 信箱會存到 MultiList 的伺服器，用來在不同瀏覽器之間同步。'),
+      el('p', {}, privacyLink),
+    ],
+    actions: [{ label: '取消' }, { label: '用 Google 登入', className: 'primary', onClick: startSignIn }],
+  });
+}
+
+async function startSignIn() {
+  state.signingIn = true;
+  state.notice = '';
+  try {
+    await signIn();
+  } catch (error) {
+    if (!(error instanceof SignInCancelled)) {
+      console.warn(error);
+      state.notice = '登入失敗，請再試一次';
+    }
+  } finally {
+    state.signingIn = false;
+    renderStatus();
+  }
+}
+
+// The account section and the cloud button follow the stored session.
+function renderAccount() {
+  const section = document.getElementById('account-setting');
+  const button = document.getElementById('account-button');
+  const topbar = document.getElementById('topbar-actions');
+  topbar.querySelector('.signin-button')?.remove();
+  section.hidden = !isSignInAvailable();
+  if (section.hidden) return;
+  const { account } = state;
+  document.getElementById('account-text').textContent = account
+    ? `已登入：${account.email}`
+    : '登入 Google 帳號，就能在其他電腦和瀏覽器使用同一份清單。';
+  button.textContent = account ? '登出' : '登入';
+  button.onclick = account ? () => signOut() : showSignInDialog;
+  if (!account) topbar.prepend(iconButton('cloud', SIGN_IN_LABEL, showSignInDialog, 'signin-button'));
+}
+
+async function setUpAccount() {
+  if (!isSignInAvailable()) return;
+  state.account = await loadAccount();
+  renderAccount();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.account) return;
+    state.account = changes.account.newValue ?? null;
+    renderAccount();
+  });
+}
+
 // The counters work like the ones for groups: a sync does not replace tabs that are not saved yet.
 function persistTabs() {
   state.tabSaving += 1;
@@ -1626,6 +1690,7 @@ async function start() {
   renderTabs();
   setUpSharingToggle();
   setUpTransfer();
+  setUpAccount();
   setUpKeysForm();
   watchStorage();
   render();
