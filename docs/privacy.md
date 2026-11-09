@@ -1,4 +1,4 @@
-[繁體中文](privacy.zh-TW.md) | **English**
+[MultiList home](en.html) · [繁體中文](privacy.zh-TW.md) | **English**
 
 # Privacy Policy: MultiList for TradingView
 
