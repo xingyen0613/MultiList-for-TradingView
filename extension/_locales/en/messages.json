@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "MultiList for TradingView",
+    "description": "Extension name, shown in Chrome and on the Chrome Web Store. At most 75 characters."
+  },
+  "extDescription": {
+    "message": "A side panel watchlist with unlimited groups, free of TradingView watchlist limits. One symbol in many sectors; click to chart it.",
+    "description": "Store summary. At most 132 characters."
+  }
+}

@@ -1,4 +1,4 @@
-**繁體中文** | [English](privacy.md)
+[MultiList 首頁](./) · **繁體中文** | [English](privacy.md)
 
 # 隱私權政策：MultiList for TradingView
 

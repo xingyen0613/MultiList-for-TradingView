@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MultiList for TradingView｜不受數量限制的側邊欄觀察清單</title>
+<meta name="description" content="免費的瀏覽器擴充功能，在側邊欄管理 TradingView 觀察清單：分組數量不限，不受 TradingView 觀察清單的數量限制；同一檔可放進多個板塊，方便觀察類股輪動與資金流向。適用 Chrome、Edge、Brave。">
+<link rel="canonical" href="https://xingyen0613.github.io/MultiList-for-TradingView/">
+<link rel="alternate" hreflang="zh-TW" href="https://xingyen0613.github.io/MultiList-for-TradingView/">
+<link rel="alternate" hreflang="en" href="https://xingyen0613.github.io/MultiList-for-TradingView/en.html">
+<link rel="alternate" hreflang="x-default" href="https://xingyen0613.github.io/MultiList-for-TradingView/">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+<link rel="apple-touch-icon" href="assets/icon-128.png">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131722" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MultiList for TradingView">
+<meta property="og:title" content="MultiList for TradingView｜不受數量限制的觀察清單">
+<meta property="og:description" content="分組數量不限，不佔 TradingView 觀察清單的額度；同一檔可放進多個板塊觀察資金輪動，點一下就切換圖表。免費的瀏覽器擴充功能。">
+<meta property="og:url" content="https://xingyen0613.github.io/MultiList-for-TradingView/">
+<meta property="og:image" content="https://xingyen0613.github.io/MultiList-for-TradingView/images/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="MultiList for TradingView 側邊欄觀察清單">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="assets/site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MultiList for TradingView",
+  "alternateName": "MultiList",
+  "description": "免費的瀏覽器擴充功能，在側邊欄管理 TradingView 觀察清單：分組數量不限，不受 TradingView 觀察清單的數量限制，同一檔可以放進多個板塊。",
+  "applicationCategory": "FinanceApplication",
+  "applicationSubCategory": "Browser extension",
+  "operatingSystem": "Chrome, Edge, Brave (desktop)",
+  "inLanguage": "zh-TW",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" },
+  "url": "https://xingyen0613.github.io/MultiList-for-TradingView/",
+  "image": "https://xingyen0613.github.io/MultiList-for-TradingView/images/og.png",
+  "screenshot": "https://xingyen0613.github.io/MultiList-for-TradingView/images/sidepanel-light.png",
+  "featureList": [
+    "分組數量不限，不受 TradingView 觀察清單的數量限制",
+    "同一檔可以放進多個板塊，觀察類股輪動與資金流向",
+    "點代碼切換 TradingView 圖表",
+    "用代碼或中英文名稱搜尋",
+    "一鍵匯入 TradingView 觀察清單",
+    "台股、美股、歐股、韓股、幣安現貨與永續合約報價",
+    "Chrome 同步，可選 Google 登入跨電腦、跨瀏覽器同步",
+    "JSON 匯出與匯入",
+    "亮色、暗色與自訂顏色"
+  ],
+  "sameAs": ["https://github.com/xingyen0613/MultiList-for-TradingView"]
+}
+</script>
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="./"><img src="assets/icon-128.png" alt="" width="32" height="32">MultiList for TradingView</a>
+  <a class="lang" href="en.html" hreflang="en" lang="en">English</a>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1>不受數量限制的 TradingView 觀察清單</h1>
+      <p class="lead">MultiList for TradingView 是免費的瀏覽器擴充功能，在側邊欄顯示你的觀察清單。分組數量不限，也不佔 TradingView 觀察清單的額度。同一檔可以同時放進多個板塊，方便觀察類股輪動與資金流向。點一下代碼，TradingView 圖表就會切換過去。</p>
+      <div class="actions">
+        <a class="button" id="install" href="https://github.com/xingyen0613/MultiList-for-TradingView">在 GitHub 查看</a>
+        <a class="button secondary" href="#faq">常見問題</a>
+      </div>
+      <p class="note">即將在 Chrome 線上應用程式商店上架，Chrome、Edge、Brave 都能從那裡安裝。免費，不用註冊帳號。</p>
+    </div>
+    <picture class="shot">
+      <source srcset="images/sidepanel-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="images/sidepanel-light.png" width="760" height="1400" alt="MultiList 側邊欄：半導體、AI 概念、美股科技、加密貨幣等分組，每個代碼顯示最新價、漲跌與漲跌幅">
+    </picture>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>功能</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>不受 TradingView 數量限制</h3>
+          <p>分組數量不限，想開幾個就開幾個。清單由 MultiList 保存，不佔 TradingView 觀察清單的數量和檔數。</p>
+        </div>
+        <div class="card">
+          <h3>同一檔放進多個板塊，看資金輪動</h3>
+          <p>台積電可以同時在「半導體」「AI 概念」「權值股」。一個板塊一個分組，比較各板塊個股的漲跌，更容易看出類股輪動與資金流向。</p>
+        </div>
+        <div class="card">
+          <h3>點代碼切換圖表</h3>
+          <p>點清單裡的代碼，開著的 TradingView 圖表就切換到該代碼。頁面不重新載入，未儲存的圖表變更會保留。</p>
+        </div>
+        <div class="card">
+          <h3>用中文或英文名稱搜尋</h3>
+          <p>輸入代碼或公司名稱就能找到標的，例如「台積電」或「Apple」。搜尋結果來自 TradingView。</p>
+        </div>
+        <div class="card">
+          <h3>一鍵匯入 TradingView 觀察清單</h3>
+          <p>從已登入的 TradingView 分頁讀取你的清單。每個清單變成一個分頁，清單裡的區段變成分組。</p>
+        </div>
+        <div class="card">
+          <h3>台股、美股、歐股、韓股與加密貨幣報價</h3>
+          <p>顯示最新價、漲跌與漲跌幅。市場包括台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安現貨與永續合約。</p>
+        </div>
+        <div class="card">
+          <h3>分頁整理，拖曳排序</h3>
+          <p>用分頁整理分組。拖曳就能調整代碼和分組的順序，也能把代碼移到其他分組。</p>
+        </div>
+        <div class="card">
+          <h3>跨電腦、跨瀏覽器同步</h3>
+          <p>在 Chrome 裡，清單透過 Chrome 帳號同步。用 Google 登入後，不同電腦、不同瀏覽器之間也能同步。</p>
+        </div>
+        <div class="card">
+          <h3>匯出與匯入、自訂顏色</h3>
+          <p>把清單匯出成 JSON 檔備份或分享。支援亮色和暗色，也可以自己調整背景與文字顏色。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>怎麼開始</h2>
+      <ol class="steps">
+        <li>從 Chrome 線上應用程式商店安裝 MultiList for TradingView。Chrome、Edge、Brave 都可以。</li>
+        <li>按瀏覽器工具列上的 MultiList 圖示，打開側邊欄。</li>
+        <li>按「一鍵匯入 TradingView 清單」帶入現有的清單，或按「新增代碼」自己加入。</li>
+        <li>打開 TradingView 圖表頁，點清單裡的代碼，圖表就會切換。</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap faq">
+      <h2>常見問題</h2>
+
+      <h3>MultiList for TradingView 是什麼？</h3>
+      <p>MultiList for TradingView 是免費的瀏覽器擴充功能，在側邊欄顯示你自己的觀察清單。分組數量不限，不受 TradingView 觀察清單的數量限制，同一檔可以放進多個分組。點代碼就會切換 TradingView 圖表。</p>
+
+      <h3>會受 TradingView 觀察清單的數量限制嗎？</h3>
+      <p>不會。MultiList 的清單由 MultiList 自己保存，不佔 TradingView 觀察清單的數量和檔數。依 <a href="https://tw.tradingview.com/pricing/">TradingView 價格頁</a>（2026 年 11 月查詢），免費的 Basic 方案有 1 個觀察清單、每個清單 30 檔。MultiList 不限分組數量，總共大約可以放 1,500 到 2,000 個代碼。</p>
+
+      <h3>分組和代碼有數量上限嗎？</h3>
+      <p>MultiList 不設分組數量上限。清單存在瀏覽器的同步儲存空間，瀏覽器限制總共約 100 KB、每個分組 8 KB。以一般的代碼和名稱估算，總共大約 1,500 到 2,000 個代碼，每個分組最多約 170 個代碼，實際數量依名稱長短而定。</p>
+
+      <h3>同一檔可以放進多個分組嗎？</h3>
+      <p>可以。例如把台積電同時放進「半導體」「AI 概念」「權值股」三個分組。每個板塊建一個分組，比較各分組裡個股的漲跌，就能觀察類股輪動和資金流向。</p>
+
+      <h3>要付費嗎？需要 TradingView 付費方案嗎？</h3>
+      <p>不用。MultiList 免費，TradingView 的免費帳號也能使用。切換圖表和搜尋需要開著 TradingView 分頁；匯入還需要登入 TradingView。</p>
+
+      <h3>MultiList 的清單和 TradingView 的觀察清單有什麼不同？</h3>
+      <p>MultiList 的清單存在你的瀏覽器，不會改動你 TradingView 帳號裡的觀察清單。匯入只會讀取 TradingView 的清單，再複製一份到 MultiList。</p>
+
+      <h3>支援哪些瀏覽器？</h3>
+      <p>支援以 Chromium 為核心的桌面瀏覽器，例如 Chrome、Edge、Brave，都從 Chrome 線上應用程式商店安裝。目前主要在 Chrome 測試，也確認過 Brave 可以載入使用。Firefox、Safari 和手機瀏覽器不支援。</p>
+
+      <h3>可以在其他電腦或瀏覽器同步清單嗎？</h3>
+      <p>可以。在 Chrome 裡，登入同一個 Chrome 帳號的電腦會自動同步清單。用 Google 登入 MultiList 後，不同電腦、不同瀏覽器之間也能同步。</p>
+
+      <h3>支援哪些市場的報價？</h3>
+      <p>台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安現貨與幣安永續合約。其他標的，例如期貨、指數、外匯，也能加入清單。它們不顯示價格，但點選後一樣會切換圖表。</p>
+
+      <h3>報價是即時的嗎？</h3>
+      <p>報價僅供參考。價格來自 TWSE MIS、Yahoo Finance、Binance 等來源，可能延遲或有誤。</p>
+
+      <h3>怎麼把 TradingView 的觀察清單匯入 MultiList？</h3>
+      <p>先在瀏覽器打開 TradingView 並登入，再按側邊欄的「一鍵匯入 TradingView 清單」。每個 TradingView 清單會變成一個分頁，清單裡的區段會變成分組。匯入的內容會加在現有清單後面，不會蓋掉任何東西。</p>
+
+      <h3>MultiList 會收集我的資料嗎？</h3>
+      <p>不登入、也不開啟匿名分享時，不會有任何資料送到 MultiList 的伺服器。Google 登入和匿名分享都是選擇性功能，細節請看<a href="privacy.zh-TW.html">隱私權政策</a>。</p>
+
+      <h3>MultiList 是 TradingView 官方的產品嗎？</h3>
+      <p>不是。MultiList for TradingView 是獨立的個人專案，與 TradingView 沒有關係，也未獲其授權或背書。</p>
+    </div>
+  </section>
+
+  <section id="notes">
+    <div class="wrap">
+      <h2>使用前須知</h2>
+      <ul class="plain">
+        <li>搜尋、切換圖表與匯入會在你的 TradingView 分頁裡執行。TradingView 改版時，這些功能可能暫時失效。</li>
+        <li>搜尋與匯入使用 TradingView 頁面未公開的介面，TradingView 的使用條款對此有限制。請自行評估風險，詳見 <a href="https://github.com/xingyen0613/MultiList-for-TradingView/blob/main/README.zh-TW.md">README</a>。</li>
+        <li>只支援以 Chromium 為核心的桌面瀏覽器，例如 Chrome、Edge、Brave。</li>
+        <li>報價僅供參考，不構成投資建議。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="privacy.zh-TW.html">隱私權政策</a> · <a href="https://github.com/xingyen0613/MultiList-for-TradingView">GitHub</a> · <a href="https://github.com/xingyen0613/MultiList-for-TradingView/issues">問題回報</a> · <a href="en.html" hreflang="en" lang="en">English</a></p>
+    <p>MultiList for TradingView 是獨立的個人專案，與 TradingView 沒有關係，也未獲其授權或背書。</p>
+  </div>
+</footer>
+</body>
+</html>
