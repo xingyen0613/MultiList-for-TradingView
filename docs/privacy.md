@@ -2,7 +2,7 @@
 
 # Privacy Policy: MultiList for TradingView
 
-Effective date: [EFFECTIVE_DATE]
+Effective date: 2026-11-10
 
 MultiList for TradingView ("the extension") is an unofficial tool. It is not affiliated with, endorsed by, or connected to TradingView.
 

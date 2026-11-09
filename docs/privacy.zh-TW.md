@@ -2,7 +2,7 @@
 
 # 隱私權政策：MultiList for TradingView
 
-生效日期：[EFFECTIVE_DATE]
+生效日期：2026-11-10
 
 MultiList for TradingView（以下稱「本插件」）是非官方工具，與 TradingView 無關，也未獲其授權或背書。
 
