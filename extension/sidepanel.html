@@ -35,6 +35,21 @@
             <a id="sharing-privacy" target="_blank" rel="noopener">隱私權政策</a>
           </p>
         </div>
+        <div id="transfer-setting">
+          <p class="setting-title">備份與分享</p>
+          <div class="transfer-row" role="radiogroup" aria-label="匯出範圍">
+            <span>匯出範圍</span>
+            <label class="check-row"><input type="radio" name="export-scope" value="all" checked />整份清單</label>
+            <label class="check-row"><input type="radio" name="export-scope" value="tab" />目前分頁</label>
+          </div>
+          <div class="transfer-row">
+            <button id="export-button" type="button" class="text-button">匯出檔案</button>
+            <button id="import-button" type="button" class="text-button">從檔案匯入</button>
+            <input id="import-file" type="file" accept=".json,application/json" hidden />
+          </div>
+          <p class="hint">匯出的 JSON 檔可以備份，或分享給別人匯入。匯入會加在現有清單後面，不會蓋掉任何東西。</p>
+          <p id="transfer-message" class="hint" role="status"></p>
+        </div>
         <form id="keys-form">
           <p class="hint">
             沒有 key 時，台股用 TWSE MIS，美股用 Yahoo。Key 只存在這台電腦，不會同步。

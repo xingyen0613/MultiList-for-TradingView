@@ -35,6 +35,7 @@ import {
 import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
 import { chartUrl, isChartUrl, marketOf, tickerOf } from './lib/symbols.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
+import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
 const REFRESH_MS = 30_000;
 const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', crypto: '加密貨幣', perp: '幣安合約' };
@@ -959,12 +960,16 @@ function buildImport(picked, symbolOf) {
   return { tabs, groups, usage };
 }
 
-function quotaMessage(usage) {
+const TRADINGVIEW_ADVICE = { group: '請在 TradingView 把這個區段拆小，或不要勾選這個清單。', total: '請少選幾個清單。' };
+const FILE_ADVICE = { group: '請先把這個分組拆小再匯出。', total: '請先刪掉一些分組或代碼，或改匯入較小的檔案。' };
+
+// advice says what to do about one group that is too large, and about a list that is too large.
+function quotaMessage(usage, advice = TRADINGVIEW_ADVICE) {
   if (usage.tooLarge) {
-    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。請在 TradingView 把這個區段拆小，或不要勾選這個清單。`;
+    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。${advice.group}`;
   }
-  if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。請少選幾個清單。`;
-  return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。請少選幾個清單。`;
+  if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。${advice.total}`;
+  return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。${advice.total}`;
 }
 
 async function runImport() {
@@ -1512,6 +1517,74 @@ function setUpKeysForm() {
   });
 }
 
+// Downloads the whole list, or one custom tab, as a JSON file. The all tab is the whole list.
+// Returns the file name.
+function downloadExport(tabId = ALL_TAB) {
+  const name = exportFileName();
+  const data = exportList(state.groups, state.customTabs, tabId);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = el('a', { href: url, download: name, hidden: true });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // The download has its own copy once it starts, so the url is not needed for long.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
+}
+
+function showTransferMessage(text, isError = false) {
+  const message = document.getElementById('transfer-message');
+  message.textContent = text;
+  message.classList.toggle('error', isError);
+}
+
+// Adds an export file to the list, like the TradingView import. A file that is not valid,
+// or a list that would not fit in Chrome sync, changes nothing.
+async function importFile(file) {
+  const tooLarge = sizeError(file.size);
+  const parsed = tooLarge ? { error: tooLarge } : parseExport(await file.text());
+  if (parsed.error) {
+    showTransferMessage(parsed.error, true);
+    return;
+  }
+  const result = importList(parsed.value, state.groups, { names: state.tabNames, custom: state.customTabs });
+  if (!result.usage.fits) {
+    showTransferMessage(quotaMessage(result.usage, FILE_ADVICE), true);
+    return;
+  }
+  const { tabs, groups, symbols } = result.added;
+  if (tabs.length === 0 && groups === 0 && symbols === 0) {
+    showTransferMessage('檔案裡沒有新的分頁、分組或代碼，清單沒有變動。');
+    return;
+  }
+  state.groups = result.groups;
+  state.customTabs = result.custom;
+  if (tabs.length > 0) persistTabs();
+  persist();
+  selectTab(tabs[0]?.id ?? ALL_TAB);
+  showTransferMessage(`已匯入 ${tabs.length} 個分頁、${groups} 個分組、${symbols} 個代碼`);
+}
+
+function setUpTransfer() {
+  const fileInput = document.getElementById('import-file');
+  document.getElementById('export-button').addEventListener('click', () => {
+    const scope = document.querySelector('input[name="export-scope"]:checked').value;
+    showTransferMessage(`已匯出 ${downloadExport(scope === 'tab' ? state.tab : ALL_TAB)}`);
+  });
+  document.getElementById('import-button').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const [file] = fileInput.files;
+    // Clears the choice, so the same file can be picked again.
+    fileInput.value = '';
+    if (!file) return;
+    try {
+      await importFile(file);
+    } catch (error) {
+      showTransferMessage(`匯入失敗：${error.message}`, true);
+    }
+  });
+}
+
 // The checkbox in the settings follows the consent, also when another window changes it.
 function setUpSharingToggle() {
   const toggle = document.getElementById('sharing-toggle');
@@ -1552,6 +1625,7 @@ async function start() {
   setUpTopbar();
   renderTabs();
   setUpSharingToggle();
+  setUpTransfer();
   setUpKeysForm();
   watchStorage();
   render();
