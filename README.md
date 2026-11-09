@@ -132,4 +132,6 @@ The tests use the built-in Node.js test runner and need Node.js 22 or later.
 
 The real-browser checks are in `e2e/` (`flow`, `cors`, `transfer`, `account`, `sync`, `delete`). Run one with `node e2e/<name>.mjs`. They need `playwright-core` with Chromium, and the MultiList server repo in `../MultiList-server` (or the path in `MULTILIST_SERVER_DIR`). The server is a separate private repo, so contributors without access cannot run the checks that need it.
 
-`SERVER_URL` and `GOOGLE_CLIENT_ID` in `extension/lib/config.js` are empty strings in this repo. While `SERVER_URL` is empty, nothing is sent to the MultiList server. While either one is empty, the sign-in screens are hidden. The `key` in `manifest.json` fixes the extension ID, because the OAuth redirect URI needs a stable ID.
+`SERVER_URL` and `GOOGLE_CLIENT_ID` in `extension/lib/config.js` point to the MultiList server and its Google OAuth client. The E2E checks replace both with local test values. For a build that talks to no server, set them to empty strings: while `SERVER_URL` is empty, nothing is sent to the MultiList server. While either one is empty, the sign-in screens are hidden. The `key` in `manifest.json` fixes the extension ID, because the OAuth redirect URI needs a stable ID.
+
+`npm run package` builds `dist/multilist-<version>.zip` for the Chrome Web Store. The zip leaves out the `key`, because the store gives the item its own key.

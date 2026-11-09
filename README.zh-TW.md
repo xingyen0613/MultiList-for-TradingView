@@ -130,4 +130,6 @@ npm test
 
 真實瀏覽器測試放在 `e2e/`（`flow`、`cors`、`transfer`、`account`、`sync`、`delete`），用 `node e2e/<名稱>.mjs` 執行。需要有 Chromium 的 `playwright-core`，以及放在 `../MultiList-server` 的 MultiList 後端 repo（也可以用環境變數 `MULTILIST_SERVER_DIR` 指定路徑）。後端是另一個私有 repo，沒有權限的開發者跑不了需要伺服器的測試。
 
-`extension/lib/config.js` 裡的 `SERVER_URL` 和 `GOOGLE_CLIENT_ID` 在這個 repo 是空字串。`SERVER_URL` 是空的時候，不會有任何資料送到 MultiList 的伺服器。只要其中一個是空的，登入畫面就會隱藏。`manifest.json` 裡的 `key` 用來固定插件 ID，因為 OAuth redirect URI 需要固定的 ID。
+`extension/lib/config.js` 裡的 `SERVER_URL` 和 `GOOGLE_CLIENT_ID` 指向 MultiList 的伺服器和它的 Google OAuth client。E2E 測試會把兩者換成本機的測試值。如果要一個不連任何伺服器的版本，把兩者改成空字串：`SERVER_URL` 是空的時候，不會有任何資料送到 MultiList 的伺服器。只要其中一個是空的，登入畫面就會隱藏。`manifest.json` 裡的 `key` 用來固定插件 ID，因為 OAuth redirect URI 需要固定的 ID。
+
+`npm run package` 會產生上架用的 `dist/multilist-<版本>.zip`。zip 裡的 manifest 沒有 `key`，因為商店會給插件自己的 key。

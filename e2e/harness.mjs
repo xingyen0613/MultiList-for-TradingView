@@ -113,14 +113,16 @@ export async function startStack({ google = false, beforeLaunch = null } = {}) {
   await cp(join(root, 'extension'), extDir, { recursive: true });
   const configPath = join(extDir, 'lib/config.js');
   const config = await readFile(configPath, 'utf8');
-  if (!config.includes("SERVER_URL = '';")) throw new Error('config.js no longer has an empty SERVER_URL');
-  let patched = config.replace("SERVER_URL = '';", `SERVER_URL = '${serverUrl}';`);
-  if (google) {
-    if (!patched.includes("GOOGLE_CLIENT_ID = '';")) throw new Error('config.js no longer has an empty GOOGLE_CLIENT_ID');
-    patched = patched
-      .replace("GOOGLE_CLIENT_ID = '';", "GOOGLE_CLIENT_ID = 'test-client-id';")
-      .replace(/GOOGLE_AUTH_URL = '[^']*';/, `GOOGLE_AUTH_URL = '${googleUrl}';`);
-  }
+  // The real server and Google client are replaced, so a test never reaches them. Without the fake
+  // Google page the client ID is emptied, which hides every sign-in screen.
+  const SERVER_RE = /SERVER_URL = '[^']*';/;
+  const CLIENT_RE = /GOOGLE_CLIENT_ID = '[^']*';/;
+  if (!SERVER_RE.test(config) || !CLIENT_RE.test(config)) throw new Error('config.js no longer has SERVER_URL and GOOGLE_CLIENT_ID');
+  let patched = config
+    .replace(SERVER_RE, `SERVER_URL = '${serverUrl}';`)
+    .replace(CLIENT_RE, `GOOGLE_CLIENT_ID = '${google ? 'test-client-id' : ''}';`);
+  if (google) patched = patched.replace(/GOOGLE_AUTH_URL = '[^']*';/, `GOOGLE_AUTH_URL = '${googleUrl}';`);
+  if (patched.includes('workers.dev') || patched.includes('googleusercontent')) throw new Error('config.js still points at the real server');
   await writeFile(configPath, patched);
   await beforeLaunch?.(extDir);
 
