@@ -39,7 +39,7 @@ import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js
 import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
 const REFRESH_MS = 30_000;
-const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', crypto: '加密貨幣', perp: '幣安合約' };
+const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', kr: '韓股', crypto: '加密貨幣', perp: '幣安合約' };
 const SEARCH_TYPES = [
   ['', '全部'],
   ['stocks', '股票'],

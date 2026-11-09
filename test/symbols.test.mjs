@@ -12,6 +12,7 @@ test('parseInput routes each input form to the right markets', () => {
   assert.deepEqual(parseInput('TWSE:2330'), { ticker: '2330', markets: ['tw'] });
   assert.deepEqual(parseInput('NYSE:TSM'), { ticker: 'TSM', markets: ['us'] });
   assert.deepEqual(parseInput('BINANCE:ETHUSDT'), { ticker: 'ETHUSDT', markets: ['crypto'] });
+  assert.deepEqual(parseInput('krx:005930'), { ticker: '005930', markets: ['kr'] });
 });
 
 test('parseInput reads the European forms', () => {
@@ -44,6 +45,7 @@ test('marketOf and tickerOf read a symbol id', () => {
   assert.equal(marketOf('XETR:IFX'), 'eu');
   assert.equal(marketOf('EURONEXT:ASML'), 'eu');
   assert.equal(marketOf('OMXSTO:SIVE'), 'eu');
+  assert.equal(marketOf('KRX:005930'), 'kr');
   assert.equal(tickerOf('NYSE:BRK.B'), 'BRK.B');
 });
 

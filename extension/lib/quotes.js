@@ -81,6 +81,19 @@ export function parseYahooSpark(json) {
   return quotes;
 }
 
+// TradingView writes KOSPI and KOSDAQ stocks both as KRX:005930. Yahoo writes 005930.KS for KOSPI
+// and 005930.KQ for KOSDAQ, and also answers the wrong suffix with an old price.
+// Tested on 2026-11-09 with 005930 (KOSPI) and 247540 (KOSDAQ).
+const KOREA_SUFFIXES = ['KS', 'KQ'];
+const koreaTickers = (ticker) => KOREA_SUFFIXES.map((suffix) => `${ticker}.${suffix}`);
+
+// The wrong suffix has no bars, so only rows with bars are kept. The keys become bare tickers, for example 005930.
+export function parseKoreaSpark(json) {
+  const live = Object.fromEntries(Object.entries(json).filter(([, row]) => row.timestamp?.length > 0));
+  const quotes = [...parseYahooSpark(live)];
+  return new Map(quotes.map(([yahooTicker, quote]) => [yahooTicker.split('.')[0], quote]));
+}
+
 export function parseBinance(json) {
   const quotes = new Map();
   for (const row of json) {
@@ -143,15 +156,15 @@ function misUrl(channels) {
 const fetchMis = (symbolIds) =>
   fetchChunks(symbolIds, MIS_CHUNK, (part) => ({ url: misUrl(part.map(misChannel)) }), parseMis);
 
+const sparkRequest = (part) => ({
+  url: `${YAHOO}/v8/finance/spark?symbols=${encodeURIComponent(part.join(','))}&range=1d&interval=1h`,
+});
+
 const fetchYahoo = (symbolIds, keys, yahooOf) =>
-  fetchChunks(
-    symbolIds.map(yahooOf),
-    YAHOO_CHUNK,
-    (part) => ({
-      url: `${YAHOO}/v8/finance/spark?symbols=${encodeURIComponent(part.join(','))}&range=1d&interval=1h`,
-    }),
-    parseYahooSpark,
-  );
+  fetchChunks(symbolIds.map(yahooOf), YAHOO_CHUNK, sparkRequest, parseYahooSpark);
+
+const fetchKorea = (symbolIds) =>
+  fetchChunks(symbolIds.flatMap((id) => koreaTickers(tickerOf(id))), YAHOO_CHUNK, sparkRequest, parseKoreaSpark);
 
 const yahooSource = { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo, keyOf: (id, yahooOf) => yahooOf(id) };
 
@@ -221,6 +234,7 @@ const SOURCES = {
     yahooSource,
   ],
   eu: [yahooSource],
+  kr: [{ label: 'Yahoo', enabled: () => true, fetch: fetchKorea }],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
   perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
 };
@@ -335,11 +349,25 @@ async function resolveEurope(ticker, yahoo) {
   return { id: europeIdOf(match.symbol), name: cleanName(match.longname ?? match.shortname), yahoo: match.symbol };
 }
 
-const RESOLVERS = { tw: resolveTaiwan, crypto: resolveCrypto, perp: resolvePerp, us: resolveUs, eu: resolveEurope };
+// Both suffixes answer, so the one with the latest trade is the real one.
+async function resolveKorea(ticker) {
+  const metas = await Promise.all(koreaTickers(ticker).map(yahooMeta));
+  const [meta] = metas.filter(Boolean).sort((a, b) => b.regularMarketTime - a.regularMarketTime);
+  return meta ? { id: `KRX:${ticker}`, name: cleanName(meta.longName ?? meta.shortName) } : null;
+}
+
+const RESOLVERS = {
+  tw: resolveTaiwan,
+  crypto: resolveCrypto,
+  perp: resolvePerp,
+  us: resolveUs,
+  eu: resolveEurope,
+  kr: resolveKorea,
+};
 
 export async function resolveSymbol(raw) {
   const parsed = parseInput(raw);
-  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股或幣安代碼`);
+  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股、韓股或幣安代碼`);
   try {
     for (const market of parsed.markets) {
       const symbol = await RESOLVERS[market](parsed.ticker, parsed.yahoo);

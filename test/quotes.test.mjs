@@ -6,6 +6,7 @@ import {
   parseAlpaca,
   parseBinance,
   parseFugle,
+  parseKoreaSpark,
   parseMis,
   parseYahooSpark,
   resolveSymbol,
@@ -59,6 +60,14 @@ test('parseYahooSpark reads a real response for European stocks', () => {
     assert.ok(quotes.get(ticker).price > 0, ticker);
     assert.equal(typeof quotes.get(ticker).changePercent, 'number', ticker);
   }
+});
+
+test('parseKoreaSpark keeps the suffix with bars and drops the old price of the wrong suffix', () => {
+  const quotes = parseKoreaSpark(fixture('yahoo-spark-korea'));
+  assert.deepEqual(quotes.get('005930'), { price: 189900, change: 1200, changePercent: 0.636 }); // KOSPI, .KS
+  assert.deepEqual(quotes.get('247540'), { price: 75900, change: -7200, changePercent: -8.664 }); // KOSDAQ, .KQ
+  assert.equal(quotes.get('086520').price, 60600);
+  assert.equal(quotes.size, 3);
 });
 
 test('parseBinance reads a real response', () => {
@@ -146,6 +155,19 @@ test('fetchQuotes gets European quotes from Yahoo with the saved Yahoo tickers',
   assert.deepEqual(asked, ['IFX.DE', 'VOLV-B.ST', 'BT-A.L']);
   assert.deepEqual([...quotes.keys()], ['XETR:IFX', 'OMXSTO:VOLV_B', 'LSE:BT.A']);
   assert.deepEqual(status, [{ market: 'eu', source: 'Yahoo', errors: [] }]);
+});
+
+test('fetchQuotes asks Yahoo for both Korean suffixes and returns KRX ids', async () => {
+  let asked;
+  globalThis.fetch = async (url) => {
+    asked = new URL(url).searchParams.get('symbols').split(',');
+    return jsonResponse(fixture('yahoo-spark-korea'));
+  };
+  const { quotes, status } = await fetchQuotes(['KRX:005930', 'KRX:247540'], {});
+  assert.deepEqual(asked, ['005930.KS', '005930.KQ', '247540.KS', '247540.KQ']);
+  assert.equal(quotes.get('KRX:005930').price, 189900);
+  assert.equal(quotes.get('KRX:247540').price, 75900);
+  assert.deepEqual(status, [{ market: 'kr', source: 'Yahoo', errors: [] }]);
 });
 
 test('fetchQuotes uses the keyed source first if the user has a key', async () => {
@@ -387,6 +409,20 @@ test('resolveSymbol keeps the exchange that the user typed', async () => {
   };
   await assert.rejects(resolveSymbol('XETR:IFX'), /找不到 IFX/);
   await assert.rejects(resolveSymbol('IFX.DE'), /找不到 IFX.DE/);
+});
+
+test('resolveSymbol takes the Korean suffix with the latest trade', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const ticker = new URL(url).pathname.split('/').pop();
+    asked.push(ticker);
+    return jsonResponse(fixture(ticker === '005930.KS' ? 'yahoo-chart-korea' : 'yahoo-chart-korea-ghost'));
+  };
+  assert.deepEqual(await resolveSymbol('KRX:005930'), { id: 'KRX:005930', name: 'Samsung Electronics Co., Ltd.' });
+  assert.deepEqual(asked.sort(), ['005930.KQ', '005930.KS']);
+
+  globalThis.fetch = async () => jsonResponse({}, 404);
+  await assert.rejects(resolveSymbol('KRX:999999'), /找不到 999999/);
 });
 
 test('resolveSymbol explains each failure', async () => {

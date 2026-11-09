@@ -36,6 +36,7 @@ export function marketOf(symbolId) {
   if (TAIWAN_EXCHANGES.has(exchange)) return 'tw';
   if (US_EXCHANGES.has(exchange)) return 'us';
   if (EUROPE_EXCHANGES.has(exchange)) return 'eu';
+  if (exchange === 'KRX') return 'kr';
   if (exchange === 'BINANCE') return ticker.endsWith('.P') ? 'perp' : 'crypto';
   return null;
 }
