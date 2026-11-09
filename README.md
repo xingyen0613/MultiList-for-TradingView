@@ -30,8 +30,9 @@ The interface is in Traditional Chinese.
 - Groups and tabs sync through your Chrome account. Without sign-in, no server is needed.
 - Optional Google sign-in. When signed in, your lists also sync through the MultiList server to other browsers, for example Chrome and Edge. Without it, lists sync only through Chrome, as before.
 - If two computers both changed the lists, they merge automatically. You are asked which copy to keep only at the first sign-in, when the two lists differ. You can export this computer's list first.
-- Export and import (**備份與分享** in the settings). Export the whole list or the current tab to a JSON file (`multilist-YYYYMMDD.json`). An import adds to your lists and never overwrites anything. Use it to back up, to move to another computer, or to share a list.
-- Delete your account in the settings. Your lists and account data on the server are deleted. The lists on this computer stay.
+- Export and import (**匯出檔案…** and **從檔案匯入…** in the **⋯** menu at the top right). Export the whole list or the current tab to a JSON file (`multilist-YYYYMMDD.json`). An import adds to your lists and never overwrites anything. Use it to back up, to move to another computer, or to share a list.
+- Pick the background and text colors (**背景與文字顏色…** in the **⋯** menu). Light Mode and Dark Mode are one click away, or you can follow the system. The colors sync through your Chrome account.
+- Delete your account (**刪除帳號…** in the **⋯** menu). Your lists and account data on the server are deleted. The lists on this computer stay.
 
 ## Install
 
@@ -51,7 +52,7 @@ The extension needs Chrome 117 or later.
 4. Click a row to open it on the chart.
 5. Press Esc to close the input box.
 
-To sign in, click the cloud button at the top of the panel, or open the **帳號** section in the settings. Before you sign in, a notice shows what is stored on the server. Export and import are under **備份與分享** in the settings.
+The first time you open the panel, it offers Google sign-in once. Later, click the cloud at the top right (it shows only when you are not signed in), or **用 Google 登入** in the **⋯** menu. The **⋯** menu also has the TradingView import, export and import, API keys, colors, anonymous sharing, sign-out and account deletion.
 
 The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930` or `BINANCE:SUIUSDT.P`. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
 
@@ -95,7 +96,7 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 | Crypto | Not needed | Binance |
 | Binance perpetual contracts | Not needed | Binance futures API |
 
-Add keys under **API key settings** at the bottom of the panel. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
+Add keys under **報價 API key…** in the **⋯** menu at the top right. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
 
 TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. A code that you type, and an imported symbol, use Yahoo or TWSE MIS to find the exchange and the name. A European search result uses Yahoo to find its Yahoo ticker.
 

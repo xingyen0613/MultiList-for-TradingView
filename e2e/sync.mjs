@@ -92,22 +92,35 @@ async function openPanel(context, name) {
 // A new browser profile with a list and a consent answer, so no consent question covers the panel.
 async function browser(name, { list = {}, consent = false } = {}) {
   const { context, worker } = await stack.openProfile();
+  // The one-time sign-in offer is marked done too, so no popup covers the panel.
   await worker.evaluate(
-    ({ items, granted }) => chrome.storage.sync.set({ ...items, consent: { v: 1, granted, at: Date.now() } }),
+    async ({ items, granted }) => {
+      await chrome.storage.local.set({ signInOffered: true });
+      await chrome.storage.sync.set({ ...items, consent: { v: 1, granted, at: Date.now() } });
+    },
     { items: list, granted: consent },
   );
   return { name, context, worker, page: await openPanel(context, name) };
 }
 
-async function openSettings(page) {
-  if (!(await page.locator('details#settings').evaluate((node) => node.open))) await page.locator('details#settings summary').click();
+// Opens the settings menu and clicks one item; the menu closes by itself.
+async function menuItem(page, name) {
+  await page.locator('#menu-button').click();
+  await page.getByRole('menuitem', { name, exact: true }).click();
 }
+const menuText = async (page) => {
+  await page.locator('#menu-button').click();
+  const text = await page.locator('#menu').textContent();
+  await page.keyboard.press('Escape');
+  return text;
+};
+// The cloud sync row sits in the tip of the update time; it shows on hover, but the text is always there.
+const syncTip = (page) => page.locator('#source-tip').textContent();
 
 // The fake Google page answers the latest request, so sign-ins run one at a time.
 async function signIn(b) {
-  await openSettings(b.page);
-  await b.page.locator('#account-button').click();
-  await b.page.locator('dialog').getByRole('button', { name: '用 Google 登入' }).click();
+  await menuItem(b.page, '用 Google 登入');
+  await b.page.locator('dialog').getByRole('button', { name: '使用 Google 帳戶登入' }).click();
   assert.ok(await waitFor(async () => (await local(b, 'account')) !== null), `${b.name} did not sign in`);
 }
 
@@ -168,11 +181,11 @@ try {
   const A = await browser('A', { list: LIST_A });
   opened.push(A);
 
-  await step('A has a list and signs in: the cloud gets that list, and the status bar says 已同步', async () => {
+  await step('A has a list and signs in: the cloud gets that list, and the sync tip says 已同步', async () => {
     await signIn(A);
     assert.ok(await waitFor(() => cloud() !== null), 'nothing reached the cloud');
     assert.ok(docsEqual(cloud().data, docFromItems(LIST_A)));
-    assert.ok(await waitFor(async () => (await A.page.locator('#status').textContent()).includes('已同步')), 'no 已同步');
+    assert.ok(await waitFor(async () => (await syncTip(A.page)).includes('已同步')), 'no 已同步');
     await noQuestion(A);
     await shot(A.page, 'status-synced');
   });
@@ -308,10 +321,9 @@ try {
   });
 
   await step('an edit followed at once by 登出 still reaches the server, and the record stays for the next sign-in', async () => {
-    await openSettings(A.page);
     const { version } = cloud();
     await removeButton(A.page, 'AMZN').click();
-    await A.page.locator('#account-button').click();
+    await menuItem(A.page, '登出');
     assert.ok(await waitFor(async () => (await local(A, 'account')) === null), 'A did not sign out');
     assert.ok(cloud().version > version, 'the edit did not go up before the sign-out');
     assert.ok(!hasSymbol(cloud().data, AMZN.id));
@@ -324,12 +336,11 @@ try {
     await showPanel(B.page);
     assert.ok(await waitFor(async () => (await local(B, 'account')) === null), 'B is still signed in');
     assert.equal(await local(B, 'signInExpired'), true);
-    await openSettings(B.page);
-    assert.ok(await waitFor(async () => (await B.page.locator('#account-text').textContent()) === '登入已過期，請重新登入'));
-    assert.equal(await B.page.locator('#account-button').textContent(), '登入');
+    assert.ok(await waitFor(async () => (await menuText(B.page)).includes('登入已過期，請重新登入')));
+    assert.match(await menuText(B.page), /用 Google 登入/);
+    assert.equal(await B.page.locator('#signin-hint').isHidden(), false);
     assert.ok(docsEqual(await listOf(B), before), 'B lost its list');
     assert.ok(await local(B, 'cloudSync'), 'cloudSync was removed');
-    await B.page.locator('#account-setting').scrollIntoViewIfNeeded();
     await shot(B.page, 'account-expired');
   });
 

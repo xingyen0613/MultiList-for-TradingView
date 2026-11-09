@@ -45,7 +45,11 @@ async function shot(page, name) {
 
 async function browser(name, list) {
   const { context, worker } = await stack.openProfile();
-  await worker.evaluate((items) => chrome.storage.sync.set({ ...items, consent: { v: 1, granted: false, at: Date.now() } }), list);
+  // The consent answer and the one-time sign-in offer are done, so no popup covers the panel.
+  await worker.evaluate(async (items) => {
+    await chrome.storage.local.set({ signInOffered: true });
+    await chrome.storage.sync.set({ ...items, consent: { v: 1, granted: false, at: Date.now() } });
+  }, list);
   const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`));
   page.on('console', (message) => message.type() === 'error' && errors.push(`${name}: ${message.text()}`));
@@ -54,15 +58,24 @@ async function browser(name, list) {
   return { name, context, worker, page };
 }
 
-async function openSettings(page) {
-  if (!(await page.locator('details#settings').evaluate((node) => node.open))) await page.locator('details#settings summary').click();
+// Opens the settings menu. menuItem clicks one item, and the menu closes by itself.
+const openMenu = (page) => page.locator('#menu-button').click();
+async function menuItem(page, name) {
+  await openMenu(page);
+  await page.getByRole('menuitem', { name, exact: true }).click();
 }
+const menuText = async (page) => {
+  await openMenu(page);
+  const text = await page.locator('#menu').textContent();
+  await page.keyboard.press('Escape');
+  return text;
+};
+const problems = (page) => page.locator('#message-bar .message.problem').allTextContents().then((list) => list.join('\n'));
 
 // The fake Google page answers the latest request, so sign-ins run one at a time.
 async function signIn(b) {
-  await openSettings(b.page);
-  await b.page.locator('#account-button').click();
-  await b.page.locator('dialog').getByRole('button', { name: '用 Google 登入' }).click();
+  await menuItem(b.page, '用 Google 登入');
+  await b.page.locator('dialog').getByRole('button', { name: '使用 Google 帳戶登入' }).click();
   assert.ok(await waitFor(async () => (await local(b, 'account')) !== null), `${b.name} did not sign in`);
 }
 
@@ -84,21 +97,20 @@ try {
     firstAccountId = (await local(A, 'account')).accountId;
   });
 
-  await step('signed in: 登出 and 刪除帳號 sit side by side inside 360px', async () => {
-    await openSettings(A.page);
-    const out = A.page.locator('#account-button');
-    const del = A.page.locator('#account-delete');
-    assert.equal(await out.textContent(), '登出');
-    assert.equal(await del.textContent(), '刪除帳號');
+  await step('signed in: the menu shows the email, 登出 and 刪除帳號… inside 360px', async () => {
+    await openMenu(A.page);
+    assert.equal(await A.page.locator('.menu-header-email').textContent(), 'tester@example.com');
+    const out = A.page.getByRole('menuitem', { name: '登出', exact: true });
+    const del = A.page.getByRole('menuitem', { name: '刪除帳號…', exact: true });
+    assert.equal(await del.isDisabled(), false);
     const [a, b] = [await out.boundingBox(), await del.boundingBox()];
-    assert.ok(a.x >= 0 && b.x + b.width <= 360, 'a button leaves the panel');
-    assert.equal(b.y, a.y, 'the buttons are on two lines');
-    await A.page.locator('#account-setting').scrollIntoViewIfNeeded();
+    assert.ok(a.x >= 0 && a.x + a.width <= 360 && b.x >= 0 && b.x + b.width <= 360, 'a menu item leaves the panel');
     await shot(A.page, 'account-signed-in');
+    await A.page.keyboard.press('Escape');
   });
 
   await step('刪除帳號 asks first; the focus is on 取消, Enter and 取消 send nothing', async () => {
-    await A.page.locator('#account-delete').click();
+    await menuItem(A.page, '刪除帳號…');
     const dialog = confirmDialog(A.page);
     await dialog.waitFor();
     assert.match(await dialog.textContent(), /雲端上的清單和帳號資料會永久刪除，無法復原。這台電腦上的清單會保留。其他已登入的瀏覽器會被登出。/);
@@ -109,7 +121,7 @@ try {
     await A.page.emulateMedia({ colorScheme: 'light' });
     await A.page.keyboard.press('Enter');
     await dialog.waitFor({ state: 'detached' });
-    await A.page.locator('#account-delete').click();
+    await menuItem(A.page, '刪除帳號…');
     await dialog.waitFor();
     await dialog.getByRole('button', { name: '取消' }).click();
     await dialog.waitFor({ state: 'detached' });
@@ -120,7 +132,7 @@ try {
 
   await step('confirming deletes the account, its cloud list and both sessions; A is signed out and keeps its list', async () => {
     const before = await listOf(A);
-    await A.page.locator('#account-delete').click();
+    await menuItem(A.page, '刪除帳號…');
     await confirmDialog(A.page).getByRole('button', { name: '刪除帳號' }).click();
     assert.ok(await waitFor(async () => (await local(A, 'account')) === null), 'A is still signed in');
     assert.equal(deletes.length, 1);
@@ -128,10 +140,11 @@ try {
     for (const key of ['cloudSync', 'syncStatus', 'syncChoice', 'signInExpired']) assert.equal(await local(A, key), null, key);
     assert.ok(docsEqual(await listOf(A), before), 'A lost its list');
     assert.ok(Object.keys(before.groups).length > 0);
-    assert.equal(await A.page.locator('#account-button').textContent(), '登入');
-    assert.equal(await A.page.locator('#account-delete').isHidden(), true);
-    assert.equal(await A.page.getByRole('button', { name: '登入以同步到其他瀏覽器' }).count(), 1);
-    assert.equal(await A.page.locator('#status-error').textContent(), '');
+    const text = await menuText(A.page);
+    assert.match(text, /用 Google 登入/);
+    assert.ok(!/登出|刪除帳號/.test(text), text);
+    assert.equal(await A.page.locator('#signin-hint').isHidden(), false);
+    assert.ok(!(await problems(A.page)).includes('失敗'), await problems(A.page));
   });
 
   await step('B asks on its next sync: 登入已過期, and its list stays', async () => {
@@ -139,8 +152,7 @@ try {
     await showPanel(B.page);
     assert.ok(await waitFor(async () => (await local(B, 'account')) === null), 'B is still signed in');
     assert.equal(await local(B, 'signInExpired'), true);
-    await openSettings(B.page);
-    assert.ok(await waitFor(async () => (await B.page.locator('#account-text').textContent()) === '登入已過期，請重新登入'));
+    assert.ok(await waitFor(async () => (await menuText(B.page)).includes('登入已過期，請重新登入')));
     assert.ok(docsEqual(await listOf(B), before), 'B lost its list');
     assert.ok(Object.keys(before.groups).length > 0);
   });
@@ -163,12 +175,13 @@ try {
       stack.server.close(done);
       stack.server.closeAllConnections();
     });
-    await openSettings(A.page);
-    await A.page.locator('#account-delete').click();
+    await menuItem(A.page, '刪除帳號…');
     await confirmDialog(A.page).getByRole('button', { name: '刪除帳號' }).click();
-    assert.ok(await waitFor(async () => (await A.page.locator('#status-error').textContent()).includes('刪除失敗，請稍後再試')));
+    assert.ok(await waitFor(async () => (await problems(A.page)).includes('刪除失敗，請稍後再試')));
     assert.ok(await local(A, 'account'));
-    assert.equal(await A.page.locator('#account-delete').isDisabled(), false);
+    await openMenu(A.page);
+    assert.equal(await A.page.getByRole('menuitem', { name: '刪除帳號…', exact: true }).isDisabled(), false);
+    await A.page.keyboard.press('Escape');
     await new Promise((done) => stack.server.listen(port, '127.0.0.1', done));
     assert.equal(stack.store.accounts.size, 1);
   });
