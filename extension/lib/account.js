@@ -5,6 +5,8 @@ import { GOOGLE_AUTH_URL, GOOGLE_CLIENT_ID, SERVER_URL } from './config.js';
 import { ensureFirstSeen } from './sharing.js';
 
 const ACCOUNT_KEY = 'account';
+// Set by the cloud sync when the server no longer accepts the session.
+const EXPIRED_KEY = 'signInExpired';
 
 // Thrown when the user closes the Google window or refuses access, so the screen can stay quiet.
 export class SignInCancelled extends Error {
@@ -100,6 +102,7 @@ export async function signIn({
   if (!token || !email) throw new Error('server answered without a session');
   const account = { email, token, accountId };
   await storage.local.set({ [ACCOUNT_KEY]: account });
+  await storage.local.remove(EXPIRED_KEY);
   return account;
 }
 

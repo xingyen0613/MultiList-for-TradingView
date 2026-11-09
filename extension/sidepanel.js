@@ -1,6 +1,6 @@
 import { readWatchlistsInPage, searchSymbolsInPage, switchSymbolInPage } from './lib/chart-page.js';
 import { columnsTemplate, DEFAULT_WIDTHS, resizeColumns, validWidths } from './lib/columns.js';
-import { directionOf, formatChange, formatPercent, formatPrice, formatTime } from './lib/format.js';
+import { directionOf, formatChange, formatDateTime, formatPercent, formatPrice, formatTime } from './lib/format.js';
 import {
   addSymbol,
   ALL_TAB,
@@ -18,6 +18,7 @@ import {
 import { diffGroups } from './lib/changes.js';
 import { isSignInAvailable, loadAccount, SignInCancelled, signIn, signOut } from './lib/account.js';
 import { PRIVACY_URL } from './lib/config.js';
+import { docFromItems, docsEqual, mergeDocs, normalizeDoc } from './lib/merge.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
   loadColumnWidths,
@@ -27,14 +28,13 @@ import {
   loadTabs,
   saveColumnWidths,
   saveCurrentTab,
-  saveGroups,
   saveKeys,
-  saveTabs,
   syncUsage,
   tabsChanged,
 } from './lib/store.js';
 import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
 import { chartUrl, isChartUrl, marketOf, tickerOf } from './lib/symbols.js';
+import { LIST_LOCK, writeDiff } from './lib/sync.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
 import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
@@ -49,6 +49,8 @@ const SEARCH_TYPES = [
   ['index', '指數'],
 ];
 const IMPORT_LIMIT = 4; // Name lookups at the same time during an import.
+const PING_MS = 15 * 60_000; // An open panel asks for the cloud copy this often.
+const FLUSH_WAIT_MS = 5000; // A sign-out waits at most this long for the last edit to go up.
 const ALL_LABEL = '全部';
 const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -93,6 +95,9 @@ const state = {
   importing: null,
   account: null,
   signingIn: false,
+  signInExpired: false,
+  syncStatus: null,
+  syncChoice: null,
 };
 
 const groupsContainer = document.getElementById('groups');
@@ -162,21 +167,60 @@ function textForm({ placeholder, value = '', label, onSubmit, onCancel }) {
 
 let saveQueue = Promise.resolve();
 
-// The groups as last saved by this panel or read from storage. A save compares against it,
-// so only edits made in this panel are recorded, not changes from another window or computer.
-let baseline = [];
+// The list (groups and tabs) as last saved by this panel or read from storage. A save compares
+// against it, so only edits made in this panel are recorded, not changes from another window or
+// computer, and a change that arrived meanwhile is merged instead of overwritten.
+const docOf = (groups, names, custom) =>
+  normalizeDoc({
+    groupOrder: groups.map((group) => group.id),
+    groups: Object.fromEntries(groups.map((group) => [group.id, group])),
+    tabNames: names,
+    customTabs: custom,
+  });
+const groupsOf = (doc) => doc.groupOrder.map((id) => doc.groups[id]);
+const panelDoc = () => docOf(state.groups, state.tabNames, state.customTabs);
+let baseline = docOf([], {}, []);
 const setBaseline = (groups) => {
-  baseline = structuredClone(groups);
+  baseline = docOf(groups, baseline.tabNames, baseline.customTabs);
+};
+const setBaselineTabs = ({ names, custom }) => {
+  baseline = docOf(groupsOf(baseline), names, custom);
 };
 
 // The background page keeps the log, and drops the events without consent.
 function recordSaved(saved) {
-  const events = diffGroups(baseline, saved, Date.now());
-  baseline = saved;
+  const events = diffGroups(groupsOf(baseline), groupsOf(saved), Date.now());
   if (events.length > 0) chrome.runtime.sendMessage({ type: 'changes', events }).catch(() => {});
 }
 
-// Saves run one at a time, and each one saves the latest groups. Two saves at once
+// Shows a list that a save merged with a change from elsewhere.
+function showList(doc) {
+  const before = state.tab;
+  state.groups = groupsOf(doc);
+  applyTabs({ names: doc.tabNames, custom: doc.customTabs });
+  if (!state.editingTab && !state.creatingTab) renderTabs();
+  render();
+  if (state.tab !== before) saveCurrentTab(state.tab);
+  fetchNewQuotes();
+}
+
+// Writes the list inside LIST_LOCK, so the cloud sync in the background cannot write between the
+// read and the write. If the stored list changed since this panel read it, both changes are kept.
+function saveList() {
+  return navigator.locks.request(LIST_LOCK, async () => {
+    const mine = panelDoc();
+    const current = docFromItems(await chrome.storage.sync.get(null));
+    const merged = docsEqual(current, baseline) ? mine : mergeDocs(baseline, mine, current);
+    await writeDiff(chrome.storage, current, merged);
+    // The log gets this panel's edits only, not what the merge brought in.
+    recordSaved(mine);
+    baseline = merged;
+    // An edit made during the save stays on top of the merged list.
+    if (!docsEqual(merged, mine)) showList(mergeDocs(mine, panelDoc(), merged));
+  });
+}
+
+// Saves run one at a time, and each one saves the latest list. Two saves at once
 // can lose a group, because each one removes items that it does not know.
 function persist() {
   state.saving += 1;
@@ -184,10 +228,8 @@ function persist() {
   saveQueue = saveQueue
     .then(async () => {
       try {
-        const saved = structuredClone(state.groups);
-        await saveGroups(saved);
+        await saveList();
         state.saveError = '';
-        recordSaved(saved);
       } catch (error) {
         state.saveError = `儲存失敗：${error.message}`;
         state.groups = await loadGroups();
@@ -1175,7 +1217,8 @@ function renderStatus() {
     .filter((item) => item.source)
     .map((item) => `${MARKET_LABELS[item.market]} ${item.source}`);
   const time = state.updatedAt ? `更新於 ${formatTime(state.updatedAt)}` : '';
-  document.getElementById('status').textContent = [time, ...sources].filter(Boolean).join(' · ');
+  const sync = state.account ? SYNC_TEXT[state.syncStatus?.state] : '';
+  document.getElementById('status').textContent = [time, ...sources, sync].filter(Boolean).join(' · ');
 }
 
 let refreshing = false;
@@ -1222,6 +1265,7 @@ function setUpTopbar() {
 }
 
 const SIGN_IN_LABEL = '登入以同步到其他瀏覽器';
+const SYNC_TEXT = { ok: '已同步', error: '同步失敗，稍後重試' };
 
 // Explains what signing in stores, and only a click on the Google button starts the flow.
 function showSignInDialog() {
@@ -1262,30 +1306,110 @@ function renderAccount() {
   section.hidden = !isSignInAvailable();
   if (section.hidden) return;
   const { account } = state;
-  document.getElementById('account-text').textContent = account
-    ? `已登入：${account.email}`
-    : '登入 Google 帳號，就能在其他電腦和瀏覽器使用同一份清單。';
+  const expired = !account && state.signInExpired;
+  const text = document.getElementById('account-text');
+  if (account) text.textContent = `已登入：${account.email}`;
+  else if (expired) text.textContent = '登入已過期，請重新登入';
+  else text.textContent = '登入 Google 帳號，就能在其他電腦和瀏覽器使用同一份清單。';
+  text.classList.toggle('expired', expired);
   button.textContent = account ? '登出' : '登入';
-  button.onclick = account ? () => signOut() : showSignInDialog;
+  button.onclick = account ? startSignOut : showSignInDialog;
   if (!account) topbar.prepend(iconButton('cloud', SIGN_IN_LABEL, showSignInDialog, 'signin-button'));
+}
+
+// The last edit goes to the cloud before the session ends, but the sign-out never waits long.
+async function startSignOut() {
+  const flushed = saveQueue.then(() => chrome.runtime.sendMessage({ type: 'flushSync' })).catch(() => {});
+  await Promise.race([flushed, new Promise((done) => setTimeout(done, FLUSH_WAIT_MS))]);
+  await signOut();
+}
+
+let choiceDialog = null;
+let choiceShown = '';
+let choiceDismissed = false;
+
+const countText = ({ groups, symbols }) => `${groups} 個分組、${symbols} 個代碼`;
+
+// The background found two different lists with nothing to merge from, and waits for the user.
+// Escape or a click outside only closes the popup, so the question comes back next time.
+// When another panel answers, syncChoice goes away and this popup closes too.
+function updateChoiceDialog() {
+  const choice = state.account ? state.syncChoice : null;
+  if (!choice) choiceDismissed = false;
+  const text = choice ? JSON.stringify(choice) : '';
+  if (choiceDialog && text === choiceShown) return;
+  choiceDialog?.close();
+  choiceDialog = null;
+  choiceShown = '';
+  if (!choice || choiceDismissed) return;
+
+  const updated = choice.cloudUpdatedAt ? `（更新於 ${formatDateTime(new Date(choice.cloudUpdatedAt))}）` : '';
+  // The focus starts on the export, so a quick Enter replaces neither list.
+  const exportButton = el(
+    'button',
+    { type: 'button', class: 'text-button', autofocus: true, onclick: () => downloadExport(ALL_TAB) },
+    '先匯出這台的清單',
+  );
+  const dialog = showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '這台和雲端的清單不同'),
+      el('p', {}, `這台：${countText(choice.local)}`),
+      el('p', {}, `雲端：${countText(choice.cloud)}${updated}`),
+      el('p', {}, '選一份保留，另一份會被取代。用雲端覆蓋這台時，同一個 Chrome 帳號的其他電腦也會跟著改變。'),
+      el('p', {}, exportButton),
+    ],
+    actions: [
+      { label: '用雲端覆蓋這台', onClick: () => sendChoice('cloud') },
+      { label: '用這台覆蓋雲端', onClick: () => sendChoice('local') },
+    ],
+    onDismiss: () => {
+      choiceDismissed = true;
+    },
+  });
+  dialog.addEventListener('close', () => {
+    if (choiceDialog !== dialog) return;
+    choiceDialog = null;
+    choiceShown = '';
+  });
+  choiceDialog = dialog;
+  choiceShown = text;
+}
+
+// A failed answer leaves syncChoice in place, so the question comes back at once.
+async function sendChoice(choice) {
+  const answer = await chrome.runtime.sendMessage({ type: 'syncChoice', choice }).catch(() => null);
+  if (!answer?.ok) updateChoiceDialog();
 }
 
 async function setUpAccount() {
   if (!isSignInAvailable()) return;
   state.account = await loadAccount();
+  const saved = await chrome.storage.local.get(['signInExpired', 'syncStatus', 'syncChoice']);
+  state.signInExpired = saved.signInExpired === true;
+  state.syncStatus = saved.syncStatus ?? null;
+  state.syncChoice = saved.syncChoice ?? null;
   renderAccount();
+  renderStatus();
+  updateChoiceDialog();
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.account) return;
-    state.account = changes.account.newValue ?? null;
-    renderAccount();
+    if (area !== 'local') return;
+    if (changes.account) state.account = changes.account.newValue ?? null;
+    if (changes.signInExpired) state.signInExpired = changes.signInExpired.newValue === true;
+    if (changes.syncStatus) state.syncStatus = changes.syncStatus.newValue ?? null;
+    if (changes.syncChoice) state.syncChoice = changes.syncChoice.newValue ?? null;
+    if (changes.account || changes.signInExpired) renderAccount();
+    if (changes.account || changes.syncStatus) renderStatus();
+    if (changes.account || changes.syncChoice) updateChoiceDialog();
   });
 }
 
 // The counters work like the ones for groups: a sync does not replace tabs that are not saved yet.
+// Tabs use the same queue as groups, because each save writes the whole list.
 function persistTabs() {
   state.tabSaving += 1;
   state.tabEdits += 1;
-  saveTabs({ names: state.tabNames, custom: state.customTabs })
+  saveQueue = saveQueue
+    .then(saveList)
     .catch((error) => {
       state.saveError = `儲存失敗：${error.message}`;
       renderStatus();
@@ -1293,7 +1417,9 @@ function persistTabs() {
     .finally(() => {
       state.tabSaving -= 1;
       if (state.tabSaving === 0) syncTabs();
-    });
+    })
+    // A rejected queue would skip every later save.
+    .catch((error) => console.error(error));
 }
 
 async function syncTabs() {
@@ -1304,6 +1430,7 @@ async function syncTabs() {
   if (JSON.stringify(tabs) === JSON.stringify({ names: state.tabNames, custom: state.customTabs })) return;
   const before = state.tab;
   applyTabs(tabs);
+  setBaselineTabs(tabs);
   // A redraw during a rename would lose the text that the user is typing.
   if (!state.editingTab && !state.creatingTab) renderTabs();
   render();
@@ -1681,8 +1808,8 @@ async function start() {
     loadTabs(),
     loadColumnWidths(),
   ]);
-  setBaseline(state.groups);
-  // Lets the background page send the weekly upload if it is due.
+  baseline = docOf(state.groups, tabs.names, tabs.custom);
+  // Lets the background page send the weekly upload if it is due, and pull the cloud copy.
   chrome.runtime.sendMessage({ type: 'panelOpened' }).catch(() => {});
   applyTabs(tabs);
   setUpColumns(widths);
@@ -1697,7 +1824,14 @@ async function start() {
   refresh();
   setInterval(refresh, REFRESH_MS);
   document.addEventListener('visibilitychange', refresh);
+  document.addEventListener('visibilitychange', pingBackground);
+  setInterval(pingBackground, PING_MS);
   await askForConsent();
+}
+
+// A panel that shows up again, or stays open, asks the background for the cloud copy.
+function pingBackground() {
+  if (!document.hidden) chrome.runtime.sendMessage({ type: 'panelVisible' }).catch(() => {});
 }
 
 start();

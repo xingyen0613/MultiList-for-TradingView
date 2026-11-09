@@ -113,6 +113,18 @@ test('signIn posts the code, verifier and first use date, then stores the sessio
   assert.equal(await codeChallenge(body.codeVerifier), new URL(calls[0]).searchParams.get('code_challenge'));
 });
 
+test('a new session clears the expired notice, a failed sign-in keeps it', async () => {
+  const good = signInDeps({ launch: (p) => `${REDIRECT}?code=c1&state=${p.get('state')}` });
+  good.storage.local.data.signInExpired = true;
+  await signIn(good.deps);
+  assert.equal(good.storage.local.data.signInExpired, undefined);
+
+  const bad = signInDeps({ launch: () => `${REDIRECT}?code=c1&state=wrong` });
+  bad.storage.local.data.signInExpired = true;
+  await assert.rejects(signIn(bad.deps), /state/);
+  assert.equal(bad.storage.local.data.signInExpired, true);
+});
+
 test('signIn stores nothing when the state does not match', async () => {
   const { deps, storage } = signInDeps({ launch: () => `${REDIRECT}?code=c1&state=wrong` });
   await assert.rejects(signIn(deps), /state/);

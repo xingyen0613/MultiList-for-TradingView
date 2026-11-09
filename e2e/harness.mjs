@@ -68,7 +68,9 @@ const base64url = (buffer) => buffer.toString('base64').replace(/\+/g, '-').repl
 // With { google: true } the server gets a fake Google token exchange, and the extension points
 // at a local page that stands in for Google's consent page: it records code_challenge and state,
 // then redirects back with code=test-code and the recorded state (or google.badState).
-export async function startStack({ google = false } = {}) {
+// beforeLaunch(extDir) can change the extension copy before any browser loads it.
+// openProfile() starts another Chromium profile with the same copy, so the extension id is the same.
+export async function startStack({ google = false, beforeLaunch = null } = {}) {
   const { chromium } = await import(pathToFileURL(join(findPlaywright(), 'index.mjs')));
   const { createServer } = await import(pathToFileURL(join(serverDir, 'src/server.js')));
   const { createMemoryStore } = await import(pathToFileURL(join(serverDir, 'src/store-memory.js')));
@@ -120,19 +122,27 @@ export async function startStack({ google = false } = {}) {
       .replace(/GOOGLE_AUTH_URL = '[^']*';/, `GOOGLE_AUTH_URL = '${googleUrl}';`);
   }
   await writeFile(configPath, patched);
+  await beforeLaunch?.(extDir);
 
-  const context = await chromium.launchPersistentContext(join(work, 'profile'), {
-    channel: 'chromium',
-    headless: true,
-    args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`],
-  });
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+  const contexts = [];
+  async function launch(name) {
+    const context = await chromium.launchPersistentContext(join(work, name), {
+      channel: 'chromium',
+      headless: true,
+      args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`],
+    });
+    contexts.push(context);
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    return { context, worker };
+  }
+  const { context, worker } = await launch('profile');
   const extensionId = new URL(worker.url()).host;
 
   const docs = (collection) =>
     [...store.docs.entries()].filter(([key]) => key.startsWith(`${collection}/`)).map(([, value]) => value);
 
   return {
+    server,
     store,
     docs,
     allowedOrigins,
@@ -144,8 +154,9 @@ export async function startStack({ google = false } = {}) {
     worker,
     extensionId,
     origin: `chrome-extension://${extensionId}`,
+    openProfile: () => launch(`profile-${contexts.length}`),
     async close() {
-      await context.close();
+      for (const each of contexts) await each.close();
       server.close();
       googleHttp?.close();
       await rm(work, { recursive: true, force: true });

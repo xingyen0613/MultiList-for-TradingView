@@ -609,6 +609,10 @@ input {
   display: none;
 }
 
+#account-text.expired {
+  color: var(--warn);
+}
+
 .setting-title {
   font-weight: 600;
 }
