@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { directionOf, formatChange, formatPercent, formatPrice } from '../extension/lib/format.js';
+import { directionOf, formatChange, formatDateTime, formatPercent, formatPrice } from '../extension/lib/format.js';
 
 test('formatPrice shows two decimals, and more for very small prices', () => {
   assert.equal(formatPrice(2135), '2,135.00');
@@ -33,4 +33,9 @@ test('directionOf follows the sign', () => {
   assert.equal(directionOf(1), 'up');
   assert.equal(directionOf(-1), 'down');
   assert.equal(directionOf(0), 'flat');
+});
+
+test('formatDateTime shows the local date and time to the minute, with zeros', () => {
+  assert.equal(formatDateTime(new Date(2026, 0, 5, 9, 3, 59)), '2026/01/05 09:03');
+  assert.equal(formatDateTime(new Date(2026, 10, 19, 23, 45)), '2026/11/19 23:45');
 });

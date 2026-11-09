@@ -35,3 +35,9 @@ export function directionOf(value) {
 export function formatTime(date) {
   return date.toLocaleTimeString('en-GB');
 }
+
+// 2026/11/09 14:05, in local time.
+export function formatDateTime(date) {
+  const pad = (number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

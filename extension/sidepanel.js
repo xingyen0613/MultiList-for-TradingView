@@ -1,6 +1,6 @@
 import { readWatchlistsInPage, searchSymbolsInPage, switchSymbolInPage } from './lib/chart-page.js';
 import { columnsTemplate, DEFAULT_WIDTHS, resizeColumns, validWidths } from './lib/columns.js';
-import { directionOf, formatChange, formatPercent, formatPrice, formatTime } from './lib/format.js';
+import { directionOf, formatChange, formatDateTime, formatPercent, formatPrice, formatTime } from './lib/format.js';
 import {
   addSymbol,
   ALL_TAB,
@@ -15,6 +15,10 @@ import {
   removeSymbol,
   visibleSymbolIds,
 } from './lib/groups.js';
+import { diffGroups } from './lib/changes.js';
+import { isSignInAvailable, loadAccount, SignInCancelled, signIn, signOut } from './lib/account.js';
+import { PRIVACY_URL } from './lib/config.js';
+import { docFromItems, docsEqual, mergeDocs, normalizeDoc } from './lib/merge.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
   loadColumnWidths,
@@ -24,14 +28,15 @@ import {
   loadTabs,
   saveColumnWidths,
   saveCurrentTab,
-  saveGroups,
   saveKeys,
-  saveTabs,
   syncUsage,
   tabsChanged,
 } from './lib/store.js';
+import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
 import { chartUrl, isChartUrl, marketOf, tickerOf } from './lib/symbols.js';
+import { LIST_LOCK, writeDiff } from './lib/sync.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
+import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
 const REFRESH_MS = 30_000;
 const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', crypto: '加密貨幣', perp: '幣安合約' };
@@ -44,6 +49,8 @@ const SEARCH_TYPES = [
   ['index', '指數'],
 ];
 const IMPORT_LIMIT = 4; // Name lookups at the same time during an import.
+const PING_MS = 15 * 60_000; // An open panel asks for the cloud copy this often.
+const FLUSH_WAIT_MS = 5000; // A sign-out waits at most this long for the last edit to go up.
 const ALL_LABEL = '全部';
 const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -53,6 +60,7 @@ const ICONS = {
   chevron: '<path d="M6 9l6 6 6-6"/>',
   check: '<path d="M5 12l5 5 9-10"/>',
   import: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  cloud: '<path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5 4.75 4.75 0 0 1 17 18H7z"/>',
 };
 
 // The search keeps its type after a symbol is added, so the next search finds the same kind.
@@ -85,6 +93,12 @@ const state = {
   resolving: false,
   search: emptySearch(),
   importing: null,
+  account: null,
+  signingIn: false,
+  signInExpired: false,
+  deleting: false,
+  syncStatus: null,
+  syncChoice: null,
 };
 
 const groupsContainer = document.getElementById('groups');
@@ -154,7 +168,60 @@ function textForm({ placeholder, value = '', label, onSubmit, onCancel }) {
 
 let saveQueue = Promise.resolve();
 
-// Saves run one at a time, and each one saves the latest groups. Two saves at once
+// The list (groups and tabs) as last saved by this panel or read from storage. A save compares
+// against it, so only edits made in this panel are recorded, not changes from another window or
+// computer, and a change that arrived meanwhile is merged instead of overwritten.
+const docOf = (groups, names, custom) =>
+  normalizeDoc({
+    groupOrder: groups.map((group) => group.id),
+    groups: Object.fromEntries(groups.map((group) => [group.id, group])),
+    tabNames: names,
+    customTabs: custom,
+  });
+const groupsOf = (doc) => doc.groupOrder.map((id) => doc.groups[id]);
+const panelDoc = () => docOf(state.groups, state.tabNames, state.customTabs);
+let baseline = docOf([], {}, []);
+const setBaseline = (groups) => {
+  baseline = docOf(groups, baseline.tabNames, baseline.customTabs);
+};
+const setBaselineTabs = ({ names, custom }) => {
+  baseline = docOf(groupsOf(baseline), names, custom);
+};
+
+// The background page keeps the log, and drops the events without consent.
+function recordSaved(saved) {
+  const events = diffGroups(groupsOf(baseline), groupsOf(saved), Date.now());
+  if (events.length > 0) chrome.runtime.sendMessage({ type: 'changes', events }).catch(() => {});
+}
+
+// Shows a list that a save merged with a change from elsewhere.
+function showList(doc) {
+  const before = state.tab;
+  state.groups = groupsOf(doc);
+  applyTabs({ names: doc.tabNames, custom: doc.customTabs });
+  if (!state.editingTab && !state.creatingTab) renderTabs();
+  render();
+  if (state.tab !== before) saveCurrentTab(state.tab);
+  fetchNewQuotes();
+}
+
+// Writes the list inside LIST_LOCK, so the cloud sync in the background cannot write between the
+// read and the write. If the stored list changed since this panel read it, both changes are kept.
+function saveList() {
+  return navigator.locks.request(LIST_LOCK, async () => {
+    const mine = panelDoc();
+    const current = docFromItems(await chrome.storage.sync.get(null));
+    const merged = docsEqual(current, baseline) ? mine : mergeDocs(baseline, mine, current);
+    await writeDiff(chrome.storage, current, merged);
+    // The log gets this panel's edits only, not what the merge brought in.
+    recordSaved(mine);
+    baseline = merged;
+    // An edit made during the save stays on top of the merged list.
+    if (!docsEqual(merged, mine)) showList(mergeDocs(mine, panelDoc(), merged));
+  });
+}
+
+// Saves run one at a time, and each one saves the latest list. Two saves at once
 // can lose a group, because each one removes items that it does not know.
 function persist() {
   state.saving += 1;
@@ -162,11 +229,12 @@ function persist() {
   saveQueue = saveQueue
     .then(async () => {
       try {
-        await saveGroups(state.groups);
+        await saveList();
         state.saveError = '';
       } catch (error) {
         state.saveError = `儲存失敗：${error.message}`;
         state.groups = await loadGroups();
+        setBaseline(state.groups);
         render();
       } finally {
         state.saving -= 1;
@@ -185,6 +253,7 @@ async function syncFromStorage() {
   const groups = await loadGroups();
   if (edits !== state.edits || JSON.stringify(groups) === JSON.stringify(state.groups)) return;
   state.groups = groups;
+  setBaseline(groups);
   render();
   refresh();
 }
@@ -321,42 +390,87 @@ function cancelEditing() {
   render();
 }
 
-// A delete asks first in a popup. 取消, Escape or a click outside the popup closes it.
-// The focus starts on 取消, so a quick Enter does not delete.
-function confirmDelete(message, onDelete) {
+// Shows a popup with the given content and buttons. Escape or a click outside closes it
+// and calls onDismiss. The first button gets the focus.
+// actions: [{ label, className, onClick }]. A button closes the popup, then runs its onClick.
+function showDialog({ content, actions, onDismiss }) {
   const dialog = el(
     'dialog',
     { class: 'confirm-dialog' },
     el(
       'div',
       { class: 'dialog-body' },
-      el('p', {}, message),
+      el('div', { class: 'dialog-content' }, ...[content].flat()),
       el(
         'div',
         { class: 'dialog-actions' },
-        el('button', { type: 'button', class: 'text-button', autofocus: true, onclick: () => dialog.close() }, '取消'),
-        el(
-          'button',
-          {
-            type: 'button',
-            class: 'text-button danger',
-            onclick: () => {
-              dialog.close();
-              onDelete();
+        ...actions.map((action, index) =>
+          el(
+            'button',
+            {
+              type: 'button',
+              class: `text-button ${action.className ?? ''}`.trim(),
+              autofocus: index === 0,
+              onclick: () => {
+                dialog.close();
+                action.onClick?.();
+              },
             },
-          },
-          '刪除',
+            action.label,
+          ),
         ),
       ),
     ),
   );
   // The dialog has no padding, so a click on the dialog itself is a click on the backdrop.
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target !== dialog) return;
+    dialog.close();
+    onDismiss?.();
   });
+  // Escape closes the dialog without a button.
+  dialog.addEventListener('cancel', () => onDismiss?.());
   dialog.addEventListener('close', () => dialog.remove());
   document.body.append(dialog);
   dialog.showModal();
+  return dialog;
+}
+
+// A delete asks first in a popup. 取消, Escape or a click outside the popup closes it.
+// The focus starts on 取消, so a quick Enter does not delete.
+function confirmDelete(message, onDelete) {
+  showDialog({
+    content: el('p', {}, message),
+    actions: [
+      { label: '取消' },
+      { label: '刪除', className: 'danger', onClick: onDelete },
+    ],
+  });
+}
+
+// Asks once whether to share anonymous list changes. Escape or a click outside decides
+// nothing, so the question comes back the next time the side panel opens.
+function showConsentDialog() {
+  const privacyLink = el('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, '隱私權政策');
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '匿名分享觀察清單？'),
+      el(
+        'p',
+        {},
+        'MultiList 會匿名記錄你的觀察清單，不含任何能認出你的個人資訊。資料只用於 MultiList 的功能開發，例如熱門代碼統計。',
+      ),
+      el('p', {}, privacyLink),
+    ],
+    actions: [
+      { label: '不同意', onClick: () => setConsent(false) },
+      { label: '同意', onClick: () => setConsent(true) },
+    ],
+  });
+}
+
+async function askForConsent() {
+  if (await needsConsentDecision()) showConsentDialog();
 }
 
 function confirmGroupDelete(group) {
@@ -893,12 +1007,16 @@ function buildImport(picked, symbolOf) {
   return { tabs, groups, usage };
 }
 
-function quotaMessage(usage) {
+const TRADINGVIEW_ADVICE = { group: '請在 TradingView 把這個區段拆小，或不要勾選這個清單。', total: '請少選幾個清單。' };
+const FILE_ADVICE = { group: '請先把這個分組拆小再匯出。', total: '請先刪掉一些分組或代碼，或改匯入較小的檔案。' };
+
+// advice says what to do about one group that is too large, and about a list that is too large.
+function quotaMessage(usage, advice = TRADINGVIEW_ADVICE) {
   if (usage.tooLarge) {
-    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。請在 TradingView 把這個區段拆小，或不要勾選這個清單。`;
+    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。${advice.group}`;
   }
-  if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。請少選幾個清單。`;
-  return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。請少選幾個清單。`;
+  if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。${advice.total}`;
+  return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。${advice.total}`;
 }
 
 async function runImport() {
@@ -1100,7 +1218,8 @@ function renderStatus() {
     .filter((item) => item.source)
     .map((item) => `${MARKET_LABELS[item.market]} ${item.source}`);
   const time = state.updatedAt ? `更新於 ${formatTime(state.updatedAt)}` : '';
-  document.getElementById('status').textContent = [time, ...sources].filter(Boolean).join(' · ');
+  const sync = state.account ? SYNC_TEXT[state.syncStatus?.state] : '';
+  document.getElementById('status').textContent = [time, ...sources, sync].filter(Boolean).join(' · ');
 }
 
 let refreshing = false;
@@ -1146,11 +1265,186 @@ function setUpTopbar() {
     .append(iconButton('import', '從 TradingView 匯入名單', startImport));
 }
 
+const SIGN_IN_LABEL = '登入以同步到其他瀏覽器';
+const SYNC_TEXT = { ok: '已同步', error: '同步失敗，稍後重試' };
+
+// Explains what signing in stores, and only a click on the Google button starts the flow.
+function showSignInDialog() {
+  if (state.signingIn) return;
+  const privacyLink = el('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, '隱私權政策');
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '登入以同步清單'),
+      el('p', {}, '登入後，你的清單（含分組名稱）和 Google 信箱會存到 MultiList 的伺服器，用來在不同瀏覽器之間同步。'),
+      el('p', {}, privacyLink),
+    ],
+    actions: [{ label: '取消' }, { label: '用 Google 登入', className: 'primary', onClick: startSignIn }],
+  });
+}
+
+async function startSignIn() {
+  state.signingIn = true;
+  state.notice = '';
+  try {
+    await signIn();
+  } catch (error) {
+    if (!(error instanceof SignInCancelled)) {
+      console.warn(error);
+      state.notice = '登入失敗，請再試一次';
+    }
+  } finally {
+    state.signingIn = false;
+    renderStatus();
+  }
+}
+
+// The account section and the cloud button follow the stored session.
+function renderAccount() {
+  const section = document.getElementById('account-setting');
+  const button = document.getElementById('account-button');
+  const topbar = document.getElementById('topbar-actions');
+  topbar.querySelector('.signin-button')?.remove();
+  section.hidden = !isSignInAvailable();
+  if (section.hidden) return;
+  const { account } = state;
+  const expired = !account && state.signInExpired;
+  const text = document.getElementById('account-text');
+  if (account) text.textContent = `已登入：${account.email}`;
+  else if (expired) text.textContent = '登入已過期，請重新登入';
+  else text.textContent = '登入 Google 帳號，就能在其他電腦和瀏覽器使用同一份清單。';
+  text.classList.toggle('expired', expired);
+  button.textContent = account ? '登出' : '登入';
+  button.onclick = account ? startSignOut : showSignInDialog;
+  const deleteButton = document.getElementById('account-delete');
+  deleteButton.hidden = !account;
+  deleteButton.disabled = state.deleting;
+  deleteButton.onclick = showDeleteAccountDialog;
+  if (!account) topbar.prepend(iconButton('cloud', SIGN_IN_LABEL, showSignInDialog, 'signin-button'));
+}
+
+// The last edit goes to the cloud before the session ends, but the sign-out never waits long.
+async function startSignOut() {
+  const flushed = saveQueue.then(() => chrome.runtime.sendMessage({ type: 'flushSync' })).catch(() => {});
+  await Promise.race([flushed, new Promise((done) => setTimeout(done, FLUSH_WAIT_MS))]);
+  await signOut();
+}
+
+const DELETE_ERRORS = { expired: '登入已過期，請重新登入後再刪除', failed: '刪除失敗，請稍後再試' };
+
+// The focus starts on 取消, so a quick Enter does not delete.
+function showDeleteAccountDialog() {
+  if (state.deleting) return;
+  showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '刪除帳號？'),
+      el('p', {}, '雲端上的清單和帳號資料會永久刪除，無法復原。這台電腦上的清單會保留。其他已登入的瀏覽器會被登出。'),
+    ],
+    actions: [{ label: '取消' }, { label: '刪除帳號', className: 'danger', onClick: startDeleteAccount }],
+  });
+}
+
+// The background runs the delete in the sync queue. On success the stored session is gone and the
+// storage listener redraws the section; the buttons stay off until the answer comes back.
+async function startDeleteAccount() {
+  state.deleting = true;
+  state.notice = '';
+  renderAccount();
+  try {
+    const answer = await chrome.runtime.sendMessage({ type: 'deleteAccount' }).catch(() => null);
+    if (!answer?.ok) state.notice = DELETE_ERRORS[answer?.reason] ?? DELETE_ERRORS.failed;
+  } finally {
+    state.deleting = false;
+    renderAccount();
+    renderStatus();
+  }
+}
+
+let choiceDialog = null;
+let choiceShown = '';
+let choiceDismissed = false;
+
+const countText = ({ groups, symbols }) => `${groups} 個分組、${symbols} 個代碼`;
+
+// The background found two different lists with nothing to merge from, and waits for the user.
+// Escape or a click outside only closes the popup, so the question comes back next time.
+// When another panel answers, syncChoice goes away and this popup closes too.
+function updateChoiceDialog() {
+  const choice = state.account ? state.syncChoice : null;
+  if (!choice) choiceDismissed = false;
+  const text = choice ? JSON.stringify(choice) : '';
+  if (choiceDialog && text === choiceShown) return;
+  choiceDialog?.close();
+  choiceDialog = null;
+  choiceShown = '';
+  if (!choice || choiceDismissed) return;
+
+  const updated = choice.cloudUpdatedAt ? `（更新於 ${formatDateTime(new Date(choice.cloudUpdatedAt))}）` : '';
+  // The focus starts on the export, so a quick Enter replaces neither list.
+  const exportButton = el(
+    'button',
+    { type: 'button', class: 'text-button', autofocus: true, onclick: () => downloadExport(ALL_TAB) },
+    '先匯出這台的清單',
+  );
+  const dialog = showDialog({
+    content: [
+      el('p', { class: 'dialog-title' }, '這台和雲端的清單不同'),
+      el('p', {}, `這台：${countText(choice.local)}`),
+      el('p', {}, `雲端：${countText(choice.cloud)}${updated}`),
+      el('p', {}, '選一份保留，另一份會被取代。用雲端覆蓋這台時，同一個 Chrome 帳號的其他電腦也會跟著改變。'),
+      el('p', {}, exportButton),
+    ],
+    actions: [
+      { label: '用雲端覆蓋這台', onClick: () => sendChoice('cloud') },
+      { label: '用這台覆蓋雲端', onClick: () => sendChoice('local') },
+    ],
+    onDismiss: () => {
+      choiceDismissed = true;
+    },
+  });
+  dialog.addEventListener('close', () => {
+    if (choiceDialog !== dialog) return;
+    choiceDialog = null;
+    choiceShown = '';
+  });
+  choiceDialog = dialog;
+  choiceShown = text;
+}
+
+// A failed answer leaves syncChoice in place, so the question comes back at once.
+async function sendChoice(choice) {
+  const answer = await chrome.runtime.sendMessage({ type: 'syncChoice', choice }).catch(() => null);
+  if (!answer?.ok) updateChoiceDialog();
+}
+
+async function setUpAccount() {
+  if (!isSignInAvailable()) return;
+  state.account = await loadAccount();
+  const saved = await chrome.storage.local.get(['signInExpired', 'syncStatus', 'syncChoice']);
+  state.signInExpired = saved.signInExpired === true;
+  state.syncStatus = saved.syncStatus ?? null;
+  state.syncChoice = saved.syncChoice ?? null;
+  renderAccount();
+  renderStatus();
+  updateChoiceDialog();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes.account) state.account = changes.account.newValue ?? null;
+    if (changes.signInExpired) state.signInExpired = changes.signInExpired.newValue === true;
+    if (changes.syncStatus) state.syncStatus = changes.syncStatus.newValue ?? null;
+    if (changes.syncChoice) state.syncChoice = changes.syncChoice.newValue ?? null;
+    if (changes.account || changes.signInExpired) renderAccount();
+    if (changes.account || changes.syncStatus) renderStatus();
+    if (changes.account || changes.syncChoice) updateChoiceDialog();
+  });
+}
+
 // The counters work like the ones for groups: a sync does not replace tabs that are not saved yet.
+// Tabs use the same queue as groups, because each save writes the whole list.
 function persistTabs() {
   state.tabSaving += 1;
   state.tabEdits += 1;
-  saveTabs({ names: state.tabNames, custom: state.customTabs })
+  saveQueue = saveQueue
+    .then(saveList)
     .catch((error) => {
       state.saveError = `儲存失敗：${error.message}`;
       renderStatus();
@@ -1158,7 +1452,9 @@ function persistTabs() {
     .finally(() => {
       state.tabSaving -= 1;
       if (state.tabSaving === 0) syncTabs();
-    });
+    })
+    // A rejected queue would skip every later save.
+    .catch((error) => console.error(error));
 }
 
 async function syncTabs() {
@@ -1169,6 +1465,7 @@ async function syncTabs() {
   if (JSON.stringify(tabs) === JSON.stringify({ names: state.tabNames, custom: state.customTabs })) return;
   const before = state.tab;
   applyTabs(tabs);
+  setBaselineTabs(tabs);
   // A redraw during a rename would lose the text that the user is typing.
   if (!state.editingTab && !state.creatingTab) renderTabs();
   render();
@@ -1446,6 +1743,88 @@ function setUpKeysForm() {
   });
 }
 
+// Downloads the whole list, or one custom tab, as a JSON file. The all tab is the whole list.
+// Returns the file name.
+function downloadExport(tabId = ALL_TAB) {
+  const name = exportFileName();
+  const data = exportList(state.groups, state.customTabs, tabId);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = el('a', { href: url, download: name, hidden: true });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // The download has its own copy once it starts, so the url is not needed for long.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
+}
+
+function showTransferMessage(text, isError = false) {
+  const message = document.getElementById('transfer-message');
+  message.textContent = text;
+  message.classList.toggle('error', isError);
+}
+
+// Adds an export file to the list, like the TradingView import. A file that is not valid,
+// or a list that would not fit in Chrome sync, changes nothing.
+async function importFile(file) {
+  const tooLarge = sizeError(file.size);
+  const parsed = tooLarge ? { error: tooLarge } : parseExport(await file.text());
+  if (parsed.error) {
+    showTransferMessage(parsed.error, true);
+    return;
+  }
+  const result = importList(parsed.value, state.groups, { names: state.tabNames, custom: state.customTabs });
+  if (!result.usage.fits) {
+    showTransferMessage(quotaMessage(result.usage, FILE_ADVICE), true);
+    return;
+  }
+  const { tabs, groups, symbols } = result.added;
+  if (tabs.length === 0 && groups === 0 && symbols === 0) {
+    showTransferMessage('檔案裡沒有新的分頁、分組或代碼，清單沒有變動。');
+    return;
+  }
+  state.groups = result.groups;
+  state.customTabs = result.custom;
+  if (tabs.length > 0) persistTabs();
+  persist();
+  selectTab(tabs[0]?.id ?? ALL_TAB);
+  showTransferMessage(`已匯入 ${tabs.length} 個分頁、${groups} 個分組、${symbols} 個代碼`);
+}
+
+function setUpTransfer() {
+  const fileInput = document.getElementById('import-file');
+  document.getElementById('export-button').addEventListener('click', () => {
+    const scope = document.querySelector('input[name="export-scope"]:checked').value;
+    showTransferMessage(`已匯出 ${downloadExport(scope === 'tab' ? state.tab : ALL_TAB)}`);
+  });
+  document.getElementById('import-button').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const [file] = fileInput.files;
+    // Clears the choice, so the same file can be picked again.
+    fileInput.value = '';
+    if (!file) return;
+    try {
+      await importFile(file);
+    } catch (error) {
+      showTransferMessage(`匯入失敗：${error.message}`, true);
+    }
+  });
+}
+
+// The checkbox in the settings follows the consent, also when another window changes it.
+function setUpSharingToggle() {
+  const toggle = document.getElementById('sharing-toggle');
+  document.getElementById('sharing-privacy').href = PRIVACY_URL;
+  const show = async () => {
+    toggle.checked = await hasConsent();
+  };
+  toggle.addEventListener('change', () => setConsent(toggle.checked));
+  show();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.consent) show();
+  });
+}
+
 function watchStorage() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
@@ -1464,16 +1843,30 @@ async function start() {
     loadTabs(),
     loadColumnWidths(),
   ]);
+  baseline = docOf(state.groups, tabs.names, tabs.custom);
+  // Lets the background page send the weekly upload if it is due, and pull the cloud copy.
+  chrome.runtime.sendMessage({ type: 'panelOpened' }).catch(() => {});
   applyTabs(tabs);
   setUpColumns(widths);
   setUpTopbar();
   renderTabs();
+  setUpSharingToggle();
+  setUpTransfer();
+  setUpAccount();
   setUpKeysForm();
   watchStorage();
   render();
   refresh();
   setInterval(refresh, REFRESH_MS);
   document.addEventListener('visibilitychange', refresh);
+  document.addEventListener('visibilitychange', pingBackground);
+  setInterval(pingBackground, PING_MS);
+  await askForConsent();
+}
+
+// A panel that shows up again, or stays open, asks the background for the cloud copy.
+function pingBackground() {
+  if (!document.hidden) chrome.runtime.sendMessage({ type: 'panelVisible' }).catch(() => {});
 }
 
 start();

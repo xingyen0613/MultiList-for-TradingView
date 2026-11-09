@@ -27,7 +27,11 @@ The interface is in Traditional Chinese.
 - Last price, change and change percent. Open groups on the current tab refresh every 30 seconds.
 - Click a row to switch the chart in your TradingView tab.
 - Drag to reorder symbols and groups, or to move a symbol to another group.
-- Groups and tabs sync through your Chrome account. No server is needed.
+- Groups and tabs sync through your Chrome account. Without sign-in, no server is needed.
+- Optional Google sign-in. When signed in, your lists also sync through the MultiList server to other browsers, for example Chrome and Edge. Without it, lists sync only through Chrome, as before.
+- If two computers both changed the lists, they merge automatically. You are asked which copy to keep only at the first sign-in, when the two lists differ. You can export this computer's list first.
+- Export and import (**備份與分享** in the settings). Export the whole list or the current tab to a JSON file (`multilist-YYYYMMDD.json`). An import adds to your lists and never overwrites anything. Use it to back up, to move to another computer, or to share a list.
+- Delete your account in the settings. Your lists and account data on the server are deleted. The lists on this computer stay.
 
 ## Install
 
@@ -46,6 +50,8 @@ The extension needs Chrome 117 or later.
 3. Click a result, or press ↑ or ↓ to mark one and press Enter. A result marked **無報價** has no price source, but you can still add it.
 4. Click a row to open it on the chart.
 5. Press Esc to close the input box.
+
+To sign in, click the cloud button at the top of the panel, or open the **帳號** section in the settings. Before you sign in, a notice shows what is stored on the server. Export and import are under **備份與分享** in the settings.
 
 The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX` or `BINANCE:SUIUSDT.P`.
 
@@ -94,8 +100,17 @@ TWSE MIS and Yahoo Finance are not documented public APIs. They can change or bl
 
 The search and the import use TradingView. See the limits below.
 
+## Privacy
+
+- If you do not sign in and do not agree to share, nothing is sent to the MultiList server.
+- If you sign in, the server stores your Google account ID, Google email, lists (with group and tab names), first-use date and account creation date. It is used to sync your lists, and kept until you delete your account.
+- Anonymous sharing (**匿名分享觀察清單**) is a separate option and is off by default. It sends symbol codes, salted-hash group and tab IDs, a random analytics ID and the extension version, with no names. It is never matched or merged with account data.
+
+See the [privacy policy](docs/privacy.md) for details.
+
 ## Limits
 
+- Cloud sync allows up to 600 groups, 2000 symbols per group and 256 KB in total. You reach the Chrome sync limits (8 KB per item, 100 KB in total) first.
 - A symbol change uses the symbol search on the TradingView page. The page does not reload, so unsaved chart changes stay.
 - If TradingView changes that page, the extension reloads the page with the new symbol and shows a notice in the panel. A reload can lose unsaved chart changes.
 - A free TradingView account still allows 2 indicators per chart.
@@ -114,3 +129,9 @@ npm test
 ```
 
 The tests use the built-in Node.js test runner and need Node.js 22 or later.
+
+The real-browser checks are in `e2e/` (`flow`, `cors`, `transfer`, `account`, `sync`, `delete`). Run one with `node e2e/<name>.mjs`. They need `playwright-core` with Chromium, and the MultiList server repo in `../MultiList-server` (or the path in `MULTILIST_SERVER_DIR`). The server is a separate private repo, so contributors without access cannot run the checks that need it.
+
+`SERVER_URL` and `GOOGLE_CLIENT_ID` in `extension/lib/config.js` point to the MultiList server and its Google OAuth client. The E2E checks replace both with local test values. For a build that talks to no server, set them to empty strings: while `SERVER_URL` is empty, nothing is sent to the MultiList server. While either one is empty, the sign-in screens are hidden. The `key` in `manifest.json` fixes the extension ID, because the OAuth redirect URI needs a stable ID.
+
+`npm run package` builds `dist/multilist-<version>.zip` for the Chrome Web Store. The zip leaves out the `key`, because the store gives the item its own key.
