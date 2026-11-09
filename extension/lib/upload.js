@@ -5,11 +5,12 @@
 
 import { SERVER_URL } from './config.js';
 import { GROUP_ID_PATTERN, SYMBOL_ID_PATTERN, snapshotOf } from './changes.js';
-import { hasConsent, isPermanentFailure } from './sharing.js';
+import { hasConsent } from './sharing.js';
 import { loadGroups } from './store.js';
 
 const CONSENT_KEY = 'consent';
 const ANALYTICS_ID_KEY = 'analyticsId';
+const ANALYTICS_SALT_KEY = 'analyticsSalt';
 const CHANGE_LOG_KEY = 'changeLog';
 const TRUNCATED_KEY = 'changeLogTruncated';
 const PENDING_KEY = 'pendingUpload';
@@ -53,20 +54,51 @@ export function recordChanges(events, { storage = chrome.storage } = {}) {
 }
 
 // When the user takes back consent, the records not yet sent are deleted from this computer.
-// What the server already has stays there. The analytics id stays too.
+// What the server already has stays there. The analytics id and salt stay too.
 export function clearUploadData({ storage = chrome.storage } = {}) {
   return enqueue(() =>
     storage.local.remove([CHANGE_LOG_KEY, TRUNCATED_KEY, PENDING_KEY, LAST_UPLOAD_KEY]),
   );
 }
 
-// The analytics id is not the install id, so the two cannot be joined.
-async function ensureAnalyticsId(storage) {
-  const data = await storage.sync.get(ANALYTICS_ID_KEY);
-  if (data[ANALYTICS_ID_KEY]) return data[ANALYTICS_ID_KEY];
-  const id = crypto.randomUUID();
-  await storage.sync.set({ [ANALYTICS_ID_KEY]: id });
-  return id;
+// The analytics id and the salt are made together. Both stay in chrome.storage.sync; the salt
+// is never uploaded, so the server cannot match hashed ids against the raw local ids.
+async function ensureAnalyticsIdentity(storage) {
+  const data = await storage.sync.get([ANALYTICS_ID_KEY, ANALYTICS_SALT_KEY]);
+  if (data[ANALYTICS_ID_KEY] && data[ANALYTICS_SALT_KEY]) {
+    return { analyticsId: data[ANALYTICS_ID_KEY], salt: data[ANALYTICS_SALT_KEY] };
+  }
+  const identity = {
+    analyticsId: data[ANALYTICS_ID_KEY] ?? crypto.randomUUID(),
+    salt: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join(''),
+  };
+  await storage.sync.set({ [ANALYTICS_ID_KEY]: identity.analyticsId, [ANALYTICS_SALT_KEY]: identity.salt });
+  return identity;
+}
+
+// The first 16 hex characters of SHA-256(salt + ':' + id).
+async function hashId(salt, id) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${id}`));
+  return Array.from(new Uint8Array(digest).subarray(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Group and tab ids leave this computer only as salted hashes. The change log keeps the raw ids.
+async function hashIds(salt, events, snapshot) {
+  const hash = async (id) => (id == null ? id : hashId(salt, id));
+  return {
+    events: await Promise.all(events.map(async (event) => ({ ...event, groupId: await hash(event.groupId) }))),
+    snapshot: {
+      groups: await Promise.all(
+        snapshot.groups.map(async (group) => ({ ...group, id: await hash(group.id), tabId: await hash(group.tabId) })),
+      ),
+    },
+  };
+}
+
+// The server rejects bad data with 4xx. Sending the same data again cannot succeed,
+// except after a timeout (408) or a rate limit (429).
+function isPermanentFailure(status) {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
 // A body that is too big would be rejected as a whole, so the oldest events go first until
@@ -92,18 +124,20 @@ function preparePending({ storage, now, version, load }) {
     if (Number.isInteger(lastUploadAt) && periodEnd - lastUploadAt < UPLOAD_INTERVAL_MS) return null;
 
     const consent = (await storage.sync.get(CONSENT_KEY))[CONSENT_KEY];
+    const { analyticsId, salt } = await ensureAnalyticsIdentity(storage);
+    const { events, snapshot } = await hashIds(salt, local[CHANGE_LOG_KEY] ?? [], snapshotOf(await load()));
     const pending = {
       uploadId: crypto.randomUUID(),
       body: {
         schemaVersion: 1,
         uploadId: null,
-        analyticsId: await ensureAnalyticsId(storage),
+        analyticsId,
         extVersion: version ?? chrome.runtime.getManifest().version,
         periodStart: Math.min(lastUploadAt ?? consent?.at ?? periodEnd, periodEnd),
         periodEnd,
         truncated: local[TRUNCATED_KEY] === true,
-        events: local[CHANGE_LOG_KEY] ?? [],
-        snapshot: snapshotOf(await load()),
+        events,
+        snapshot,
       },
     };
     pending.body.uploadId = pending.uploadId;

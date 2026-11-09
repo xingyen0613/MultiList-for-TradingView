@@ -50,22 +50,27 @@ try {
 
   const pageA = await openPanel();
 
-  await step('the consent dialog opens and nothing is sent before a decision', async () => {
+  await step('the consent dialog opens, firstSeenAt already exists, and nothing is sent before a decision', async () => {
     await pageA.getByText('匿名分享觀察清單？').waitFor({ timeout: 5000 });
     await sleep(1000);
     assert.equal(stack.seen.POST, 0);
+    const firstSeenAt = await worker.evaluate(async () => (await chrome.storage.sync.get('firstSeenAt')).firstSeenAt ?? null);
+    assert.ok(Number.isInteger(firstSeenAt), 'firstSeenAt was not recorded');
   });
 
-  await step('agreeing registers the install and sends a first snapshot without names', async () => {
+  await step('agreeing sends a first snapshot without names', async () => {
     await pageA.getByRole('button', { name: '同意', exact: true }).click();
-    assert.ok(await waitFor(() => stack.docs('installs').length === 1), 'no install');
     assert.ok(await waitFor(() => uploads().length === 1), 'no first snapshot');
     const [first] = uploads();
     assert.equal(first.eventCount, 0);
     const snapshot = JSON.parse(first.snapshotJson);
-    assert.deepEqual(snapshot.groups.find((group) => group.id === 'g1').symbols, ['TWSE:2330', 'NASDAQ:NVDA']);
+    assert.ok(snapshot.groups.every((group) => /^[0-9a-f]{16}$/.test(group.id)), 'group ids are not hashed');
+    assert.ok(!snapshot.groups.some((group) => group.id === 'g1' || group.id === 'g2'), 'raw group ids were uploaded');
+    assert.deepEqual(
+      snapshot.groups.map((group) => group.symbols).sort(),
+      [['BINANCE:BTCUSDT'], ['TWSE:2330', 'NASDAQ:NVDA']],
+    );
     assert.ok(!first.snapshotJson.includes('科技') && !first.snapshotJson.includes('台積電'), 'names were uploaded');
-    assert.notEqual(first.analyticsId, stack.docs('installs')[0].installId);
   });
 
   await step('removing a symbol in the panel records one remove event', async () => {
@@ -148,4 +153,4 @@ try {
   await stack.close();
 }
 
-finish(`uploads stored: ${stack.docs('uploads').length}, installs stored: ${stack.docs('installs').length}`);
+finish(`uploads stored: ${stack.docs('uploads').length}`);

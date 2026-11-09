@@ -1,4 +1,4 @@
-import { registerInstall } from './lib/sharing.js';
+import { ensureFirstSeen } from './lib/sharing.js';
 import { clearUploadData, maybeUpload, recordChanges } from './lib/upload.js';
 
 const UPLOAD_ALARM = 'multilist-upload';
@@ -7,17 +7,6 @@ const UPLOAD_ALARM = 'multilist-upload';
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
-
-// Only one registration runs at a time. Two at once could each make a different install id.
-let registering = null;
-function register() {
-  registering ??= registerInstall()
-    .catch((error) => console.error(error))
-    .finally(() => {
-      registering = null;
-    });
-  return registering;
-}
 
 const upload = () => maybeUpload().catch((error) => console.error(error));
 
@@ -30,11 +19,10 @@ async function ensureAlarm() {
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureAlarm();
-  register();
+  ensureFirstSeen().catch((error) => console.error(error));
 });
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
-  register();
   upload();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -59,8 +47,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
-  // Registration starts as soon as the user agrees, then the first snapshot goes out.
-  if (changes.consent?.newValue?.granted === true) register().then(upload);
+  // The first snapshot goes out as soon as the user agrees.
+  if (changes.consent?.newValue?.granted === true) upload();
   // Taking back consent deletes the records on this computer that were not sent yet.
   if (changes.consent?.newValue?.granted === false) clearUploadData().catch((error) => console.error(error));
 });

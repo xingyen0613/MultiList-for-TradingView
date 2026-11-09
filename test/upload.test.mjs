@@ -97,8 +97,10 @@ test('the first upload goes out at once with a body that matches the contract', 
   assert.equal(body.periodStart, 1_000);
   assert.equal(body.periodEnd, T0);
   assert.equal(body.truncated, false);
-  assert.deepEqual(body.events, [ev(1)]);
-  assert.deepEqual(body.snapshot, { groups: [{ id: 'g1', tabId: 'tab1', symbols: ['NASDAQ:AAPL'] }] });
+  assert.deepEqual(body.events, [{ ...ev(1), groupId: await hashOf(storage, 'g1') }]);
+  assert.deepEqual(body.snapshot, {
+    groups: [{ id: await hashOf(storage, 'g1'), tabId: await hashOf(storage, 'tab1'), symbols: ['NASDAQ:AAPL'] }],
+  });
   assert.ok(!JSON.stringify(body).includes('Secret name'));
   assert.ok(!JSON.stringify(body).includes('Apple'));
   assert.equal(storage.local.data.pendingUpload, undefined);
@@ -150,7 +152,7 @@ test('events added while the request runs stay in the log', async () => {
   release();
 
   assert.equal(await pending, 'uploaded');
-  assert.deepEqual(calls[0].body.events, [ev(1)]);
+  assert.deepEqual(calls[0].body.events, [{ ...ev(1), groupId: await hashOf(storage, 'g1') }]);
   assert.deepEqual(storage.local.data.changeLog, [ev(2)]);
 });
 
@@ -194,16 +196,89 @@ test('taking back consent deletes the collected data and keeps the analytics id'
   assert.equal(storage.sync.data.analyticsId, id);
 });
 
-test('the analytics id stays the same across uploads and differs from the install id', async () => {
-  const installId = '11111111-2222-4333-8444-555555555555';
-  const storage = fakeStorage({ sync: { ...AGREED, installId } });
+test('the analytics id stays the same across uploads', async () => {
+  const storage = fakeStorage({ sync: AGREED });
   const { calls, fetchImpl } = fakeFetch(201);
   await run(storage, fetchImpl);
   await run(storage, fetchImpl, { time: T0 + 7 * DAY });
   await run(storage, fetchImpl, { time: T0 + 14 * DAY });
   assert.equal(calls.length, 3);
   assert.equal(new Set(calls.map((call) => call.body.analyticsId)).size, 1);
-  assert.notEqual(calls[0].body.analyticsId, installId);
+});
+
+// What the upload should send for an id: the first 16 hex characters of SHA-256(salt:id).
+async function hashOf(storage, id) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${storage.sync.data.analyticsSalt}:${id}`));
+  return Buffer.from(bytes).toString('hex').slice(0, 16);
+}
+
+test('the salt is 32 random bytes in hex, made with the analytics id, and kept', async () => {
+  const storage = fakeStorage({ sync: AGREED });
+  const { fetchImpl } = fakeFetch(201);
+  await run(storage, fetchImpl);
+  const { analyticsId, analyticsSalt } = storage.sync.data;
+  assert.match(analyticsSalt, /^[0-9a-f]{64}$/);
+  await run(storage, fetchImpl, { time: T0 + 7 * DAY });
+  assert.equal(storage.sync.data.analyticsId, analyticsId);
+  assert.equal(storage.sync.data.analyticsSalt, analyticsSalt);
+});
+
+test('the upload holds no raw group or tab id, and the salt is not in it', async () => {
+  const storage = fakeStorage({ sync: AGREED });
+  const { calls, fetchImpl } = fakeFetch(201);
+  await recordChanges([ev(1)], { storage });
+  await run(storage, fetchImpl, { loadGroups: async () => [...GROUPS, { id: 'g2', symbols: [] }] });
+  const text = JSON.stringify(calls[0].body);
+  for (const raw of ['g1', 'g2', 'tab1']) assert.ok(!text.includes(`"${raw}"`), raw);
+  assert.ok(!text.includes(storage.sync.data.analyticsSalt));
+  assert.ok(!('analyticsSalt' in calls[0].body));
+  for (const group of calls[0].body.snapshot.groups) assert.match(group.id, /^[0-9a-f]{16}$/);
+});
+
+test('a tab id that is null or missing stays as it is; the hash of an id uses SHA-256 of salt:id', async () => {
+  const storage = fakeStorage({ sync: AGREED });
+  const { calls, fetchImpl } = fakeFetch(201);
+  const groups = [
+    { id: 'g1', tabId: null, symbols: [] },
+    { id: 'loose-tab1', symbols: [] },
+  ];
+  await run(storage, fetchImpl, { loadGroups: async () => groups });
+  const [first, loose] = calls[0].body.snapshot.groups;
+  assert.equal(first.tabId, null);
+  assert.equal(loose.tabId, null);
+  assert.equal(first.id, await hashOf(storage, 'g1'));
+  assert.equal(loose.id, await hashOf(storage, 'loose-tab1'));
+});
+
+test('the same salt gives the same hash across uploads, and events match the snapshot', async () => {
+  const storage = fakeStorage({ sync: AGREED });
+  const { calls, fetchImpl } = fakeFetch(201);
+  await recordChanges([ev(1)], { storage });
+  await run(storage, fetchImpl);
+  await recordChanges([ev(2)], { storage });
+  await run(storage, fetchImpl, { time: T0 + 7 * DAY });
+  const [a, b] = calls.map((call) => call.body);
+  assert.equal(a.events[0].groupId, a.snapshot.groups[0].id);
+  assert.equal(b.events[0].groupId, a.events[0].groupId);
+  assert.equal(b.snapshot.groups[0].id, a.snapshot.groups[0].id);
+  assert.equal(b.snapshot.groups[0].tabId, a.snapshot.groups[0].tabId);
+});
+
+test('the change log keeps raw ids; the pending upload keeps the hashed body for a resend', async () => {
+  const storage = fakeStorage({ sync: AGREED });
+  await recordChanges([ev(1)], { storage });
+  const failing = fakeFetch(500);
+  await run(storage, failing.fetchImpl);
+  assert.equal(storage.local.data.pendingUpload.body.events[0].groupId, await hashOf(storage, 'g1'));
+  await recordChanges([ev(2)], { storage });
+  assert.equal(storage.local.data.changeLog[0].groupId, 'g1');
+});
+
+test('4xx other than 408 and 429 drop the batch, others retry', async () => {
+  for (const [status, expected] of [[400, 'rejected'], [404, 'rejected'], [413, 'rejected'], [408, 'retry'], [429, 'retry'], [500, 'retry']]) {
+    const storage = fakeStorage({ sync: AGREED });
+    assert.equal(await run(storage, fakeFetch(status).fetchImpl), expected, String(status));
+  }
 });
 
 test('nothing is sent when the server is not set', async () => {
