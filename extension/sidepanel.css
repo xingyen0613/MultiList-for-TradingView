@@ -592,6 +592,32 @@ input {
   gap: 6px;
 }
 
+#transfer-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0 6px;
+}
+
+#transfer-setting p {
+  margin: 0;
+}
+
+.setting-title {
+  font-weight: 600;
+}
+
+.transfer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+#transfer-message.error {
+  color: var(--down);
+}
+
 #keys-form {
   display: flex;
   flex-direction: column;
