@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "MultiList for TradingView：分組不限的觀察清單",
+    "description": "Extension name, shown in Chrome and on the Chrome Web Store. At most 75 characters."
+  },
+  "extDescription": {
+    "message": "瀏覽器側邊欄觀察清單：分組數量不限，不受 TradingView 觀察清單的數量限制；同一檔可放進多個板塊觀察資金輪動，點一下就切換圖表。",
+    "description": "Store summary. At most 132 characters."
+  }
+}
