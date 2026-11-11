@@ -2,7 +2,7 @@
 
 # 隱私權政策：MultiList for TradingView
 
-生效日期：2026-11-10
+生效日期：2026-11-12
 
 MultiList for TradingView（以下稱「本插件」）是非官方工具，與 TradingView 無關，也未獲其授權或背書。
 
@@ -27,6 +27,12 @@ MultiList for TradingView（以下稱「本插件」）是非官方工具，與 
 - TWSE MIS（mis.twse.com.tw）
 - Yahoo Finance
 - Binance
+- Bybit
+- OKX
+- Bitget
+- Gate
+- KuCoin
+- MEXC
 - Fugle
 - Alpaca
 

@@ -45,7 +45,7 @@ Rules for the descriptions (Chrome Web Store keyword spam policy and spam FAQ):
 • 一鍵切換圖表：頁面不重新載入，未儲存的變更會保留。
 • 用代碼或公司名稱搜尋，中文、英文都可以，例如「台積電」或「Apple」。
 • 一鍵匯入現有的觀察清單：每個清單變成一個分頁，每個區段變成一個分組。
-• 報價：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安現貨與永續合約的最新價、漲跌、漲跌幅。
+• 報價：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安、Bybit、OKX、Bitget、Gate、KuCoin、MEXC 加密貨幣的最新價、漲跌、漲跌幅。
 • 用分頁整理，拖曳就能調整順序。
 • 同步：在 Chrome 裡透過 Chrome 帳號同步；也可以用 Google 登入，在不同電腦、不同瀏覽器之間同步。
 • 匯出、匯入 JSON 檔，用來備份、搬到新電腦或分享給朋友。
@@ -78,7 +78,7 @@ Features
 • Click to switch the chart. The page does not reload, so unsaved changes stay.
 • Search by ticker or company name, in English or Chinese.
 • Import your existing watchlists in one click: each list becomes a tab, and each section becomes a group.
-• Last price, change and change % for Taiwan, US, European and Korean stocks (KOSPI, KOSDAQ), and Binance spot and perpetual markets.
+• Last price, change and change % for Taiwan, US, European and Korean stocks (KOSPI, KOSDAQ), and crypto on Binance, Bybit, OKX, Bitget, Gate, KuCoin and MEXC.
 • Organize groups in tabs, and drag to reorder.
 • Sync through your Chrome account in Chrome. Optional Google sign-in syncs across computers and browsers.
 • Export and import a JSON file to back up, move or share a list.
@@ -111,7 +111,7 @@ This is an independent project. It is not affiliated with, endorsed by, or conne
 
 ## Privacy practices
 
-Each block below is one field on the dashboard's Privacy practices tab. Checked against the code on 2026-11-10 (`background.js`, `sidepanel.js`, `lib/account.js`, `lib/chart-page.js`, `lib/quotes.js`, `lib/store.js`, `lib/upload.js`).
+Each block below is one field on the dashboard's Privacy practices tab. Checked against the code on 2026-11-12 (`background.js`, `sidepanel.js`, `lib/account.js`, `lib/chart-page.js`, `lib/quotes.js`, `lib/store.js`, `lib/upload.js`).
 
 **Single purpose**:
 
@@ -162,6 +162,12 @@ chrome.storage.sync keeps the user's watchlists (tabs, groups, symbols) and sett
 - query1.finance.yahoo.com: quotes for US, European and Korean stocks.
 - data.alpaca.markets: US stock quotes, only if the user enters their own Alpaca API key.
 - data-api.binance.vision and fapi.binance.com: quotes for crypto spot pairs and perpetual futures.
+- api.bybit.com: Bybit quotes for crypto spot pairs and perpetual futures.
+- www.okx.com: OKX quotes for crypto spot pairs and perpetual futures.
+- api.bitget.com: Bitget quotes for crypto spot pairs and perpetual futures.
+- api.gateio.ws: Gate quotes for crypto spot pairs and perpetual futures.
+- api.kucoin.com: KuCoin quotes for crypto spot pairs.
+- api.mexc.com and contract.mexc.com: MEXC quotes for crypto spot pairs and perpetual futures.
 Quote requests contain only the symbols in the user's list, plus the user's own key for Fugle or Alpaca.
 ```
 

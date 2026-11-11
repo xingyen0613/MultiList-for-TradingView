@@ -1,4 +1,4 @@
-import { europeIdOf, marketOf, parseInput, tickerOf, toYahooTicker } from './symbols.js';
+import { EXCHANGE_MARKETS, europeIdOf, marketOf, parseInput, splitPair, tickerOf, toYahooTicker } from './symbols.js';
 
 const TIMEOUT_MS = 10_000;
 const MIS_CHUNK = 100; // Tested: one request returns 100 symbols.
@@ -223,6 +223,135 @@ const fetchBinancePerp = async (symbolIds) => {
   return parseBinance(rows);
 };
 
+// Other crypto exchanges. The keys are the markets from marketOf.
+// Each symbol is one request, because a request for all pairs returns 120 KB to 1.5 MB,
+// and MEXC ignores a list of symbols. Each function gets a pair without .P, and returns its quote,
+// or null if the exchange does not have the pair. marketOf gives these markets only pairs with a known
+// quote currency, and only USDT perpetual contracts for Bitget and Gate.
+// The change is for the last 24 hours, like Binance.
+// Tested on 2026-11-12: Bybit, OKX and MEXC futures answer an unknown pair with HTTP 200 and an error code,
+// Bitget, Gate and MEXC spot answer with HTTP 400, and KuCoin answers with empty fields.
+const EXCHANGE_PER_SECOND = 10; // Tested: 40 requests at once got HTTP 429 for 10 at OKX and 16 at Bitget.
+
+// Returns null if the price is missing.
+function quoteOf(price, previous) {
+  const number = toNumber(price);
+  return number === null ? null : quoteFromPrevious(number, toNumber(previous));
+}
+
+// The price before a change, or null if the change is missing.
+function priceBefore(price, change) {
+  const [now, amount] = [toNumber(price), toNumber(change)];
+  return now === null || amount === null ? null : now - amount;
+}
+
+async function fetchOrNull(url) {
+  try {
+    return await fetchJson(url);
+  } catch (error) {
+    if (error.status === 400) return null;
+    throw error;
+  }
+}
+
+async function bybitQuote(category, symbol) {
+  const json = await fetchJson(`https://api.bybit.com/v5/market/tickers?category=${category}&symbol=${symbol}`);
+  const row = json.result?.list?.[0];
+  return row ? quoteOf(row.lastPrice, row.prevPrice24h) : null;
+}
+
+async function okxQuote(instId) {
+  const json = await fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`);
+  const row = json.data?.[0];
+  return row ? quoteOf(row.last, row.open24h) : null;
+}
+
+// Spot rows have open, and futures rows have open24h. Both are the price 24 hours ago.
+async function bitgetQuote(path) {
+  const row = (await fetchOrNull(`https://api.bitget.com/api/v2/${path}`))?.data?.[0];
+  return row ? quoteOf(row.lastPr, row.open ?? row.open24h) : null;
+}
+
+async function mexcPerpQuote(contract) {
+  const base = 'https://contract.mexc.com/api/v1/contract';
+  const start = Math.floor(Date.now() / 1000) - 86_400;
+  // The ticker change counts from 00:00 UTC+8, so the previous price is the open of the first 1-minute bar
+  // in the hour after 24 hours ago. A minute with no trade has no bar. Without a bar in that hour,
+  // the quote has a price and no change. Tested: a contract with no trade in 24 hours has no bars.
+  const [ticker, bars] = await Promise.all([
+    fetchJson(`${base}/ticker?symbol=${contract}`),
+    fetchJson(`${base}/kline/${contract}?interval=Min1&start=${start}&end=${start + 3600}`).catch(() => null),
+  ]);
+  return ticker.success ? quoteOf(ticker.data?.lastPrice, bars?.data?.open?.[0]) : null;
+}
+
+const pairWith = (ticker, separator) => splitPair(ticker).join(separator);
+
+// Gate spot gives only a percentage. The change keeps the decimals of the last price.
+function gateSpotQuote(row) {
+  const price = toNumber(row.last);
+  const percent = toNumber(row.change_percentage);
+  if (price === null) return null;
+  if (percent === null) return { price, change: null, changePercent: null };
+  const decimals = (String(row.last).split('.')[1] ?? '').length;
+  const change = Number((price - price / (1 + percent / 100)).toFixed(decimals));
+  return { price, change, changePercent: percent };
+}
+
+const EXCHANGE_QUOTES = {
+  bybit: (ticker) => bybitQuote('spot', ticker),
+  'bybit-perp': (ticker) => bybitQuote(splitPair(ticker)[1] === 'USD' ? 'inverse' : 'linear', ticker),
+  okx: (ticker) => okxQuote(pairWith(ticker, '-')),
+  'okx-perp': (ticker) => okxQuote(`${pairWith(ticker, '-')}-SWAP`),
+  bitget: (ticker) => bitgetQuote(`spot/market/tickers?symbol=${ticker}`),
+  'bitget-perp': (ticker) => bitgetQuote(`mix/market/ticker?productType=USDT-FUTURES&symbol=${ticker}`),
+  gate: async (ticker) => {
+    const url = `https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${pairWith(ticker, '_')}`;
+    const row = (await fetchOrNull(url))?.[0];
+    return row ? gateSpotQuote(row) : null;
+  },
+  'gate-perp': async (ticker) => {
+    const url = `https://api.gateio.ws/api/v4/futures/usdt/tickers?contract=${pairWith(ticker, '_')}`;
+    const row = (await fetchOrNull(url))?.[0];
+    return row ? quoteOf(row.last, priceBefore(row.last, row.change_price)) : null;
+  },
+  kucoin: async (ticker) => {
+    const row = (await fetchJson(`https://api.kucoin.com/api/v1/market/stats?symbol=${pairWith(ticker, '-')}`)).data;
+    return row ? quoteOf(row.last, priceBefore(row.last, row.changePrice)) : null;
+  },
+  mexc: async (ticker) => {
+    const row = await fetchOrNull(`https://api.mexc.com/api/v3/ticker/24hr?symbol=${ticker}`);
+    return row ? quoteOf(row.lastPrice, row.openPrice) : null;
+  },
+  'mexc-perp': (ticker) => mexcPerpQuote(pairWith(ticker, '_')),
+};
+
+const exchangeMarket = (market) => EXCHANGE_MARKETS.find((item) => item.market === market);
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// The ticker keeps .P for a perpetual contract. It goes into URLs, so it is encoded.
+const exchangeQuote = (market, ticker) => EXCHANGE_QUOTES[market](encodeURIComponent(ticker.replace(/\.P$/, '')));
+
+// Sends at most EXCHANGE_PER_SECOND requests each second. A failed request skips its symbol.
+// The source reports an error only if every request fails.
+async function fetchEachSymbol(market, symbolIds) {
+  const tickers = symbolIds.map(tickerOf);
+  const results = [];
+  for (const [i, part] of chunk(tickers, EXCHANGE_PER_SECOND).entries()) {
+    if (i > 0) await sleep(1000);
+    results.push(...(await Promise.allSettled(part.map(async (ticker) => exchangeQuote(market, ticker)))));
+  }
+  if (results.every((result) => result.status === 'rejected')) throw results[0].reason;
+  return new Map(tickers.map((ticker, i) => [ticker, results[i].value]).filter(([, quote]) => quote));
+}
+
+const EXCHANGE_SOURCES = Object.fromEntries(
+  Object.keys(EXCHANGE_QUOTES).map((market) => [
+    market,
+    [{ label: exchangeMarket(market).name, enabled: () => true, fetch: (ids) => fetchEachSymbol(market, ids) }],
+  ]),
+);
+
 // Each market tries its enabled sources in order, and uses the first that works.
 const SOURCES = {
   tw: [
@@ -237,6 +366,7 @@ const SOURCES = {
   kr: [{ label: 'Yahoo', enabled: () => true, fetch: fetchKorea }],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
   perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
+  ...EXCHANGE_SOURCES,
 };
 
 async function fetchMarket(market, symbolIds, keys, yahooOf) {
@@ -356,6 +486,12 @@ async function resolveKorea(ticker) {
   return meta ? { id: `KRX:${ticker}`, name: cleanName(meta.longName ?? meta.shortName) } : null;
 }
 
+// Finds a pair on another crypto exchange. A perpetual contract keeps .P in its id.
+const resolveOnExchange = (market) => async (ticker) => {
+  const quote = await exchangeQuote(market, ticker);
+  return quote ? { id: `${exchangeMarket(market).exchange}:${ticker}`, name: '' } : null;
+};
+
 const RESOLVERS = {
   tw: resolveTaiwan,
   crypto: resolveCrypto,
@@ -363,18 +499,22 @@ const RESOLVERS = {
   us: resolveUs,
   eu: resolveEurope,
   kr: resolveKorea,
+  ...Object.fromEntries(Object.keys(EXCHANGE_QUOTES).map((market) => [market, resolveOnExchange(market)])),
 };
 
 export async function resolveSymbol(raw) {
   const parsed = parseInput(raw);
-  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股、韓股或幣安代碼`);
-  try {
-    for (const market of parsed.markets) {
+  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股、韓股或加密貨幣代碼`);
+  // A failed market does not stop the others, because a typed pair is looked up on up to 7 exchanges.
+  let failure = null;
+  for (const market of parsed.markets) {
+    try {
       const symbol = await RESOLVERS[market](parsed.ticker, parsed.yahoo);
       if (symbol) return symbol;
+    } catch (error) {
+      failure ??= error;
     }
-  } catch (error) {
-    throw new Error(`查詢 ${parsed.ticker} 失敗（${error.message}）`);
   }
+  if (failure) throw new Error(`查詢 ${parsed.ticker} 失敗（${failure.message}）`);
   throw new Error(`找不到 ${parsed.ticker}`);
 }

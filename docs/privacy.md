@@ -2,7 +2,7 @@
 
 # Privacy Policy: MultiList for TradingView
 
-Effective date: 2026-11-10
+Effective date: 2026-11-12
 
 MultiList for TradingView ("the extension") is an unofficial tool. It is not affiliated with, endorsed by, or connected to TradingView.
 
@@ -27,6 +27,12 @@ Quotes come from:
 - TWSE MIS (mis.twse.com.tw)
 - Yahoo Finance
 - Binance
+- Bybit
+- OKX
+- Bitget
+- Gate
+- KuCoin
+- MEXC
 - Fugle
 - Alpaca
 
