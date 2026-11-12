@@ -25,6 +25,8 @@ The interface is in English and Traditional Chinese. It follows your browser lan
 - Drag a group header onto a tab to move the group there. Drop it on **All** to take it out of its custom tab.
 - Drag the lines in the column header to change the column widths. A column cannot get narrower than its widest number. Double-click a line to go back to the default widths. Widths stay on this computer.
 - Last price, change and change percent. Open groups on the current tab refresh every 30 seconds.
+- Click the column button at the right end of the column header to choose the columns. Hidden columns keep their widths. The choice syncs through your Chrome account.
+- US stocks get a second line with the pre-market or after-hours price, under the same columns. The change is from the last regular close. The first line shows the regular session only: the live price during the session, and the official close after it. The line shows only outside the regular session, and you can turn it off in the column menu. Overnight trades (20:00 to 04:00 New York time) are not included.
 - Click a row to switch the chart in your TradingView tab.
 - Drag to reorder symbols and groups, or to move a symbol to another group.
 - Groups and tabs sync through your Chrome account. Without sign-in, no server is needed.
@@ -92,6 +94,7 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 | --- | --- | --- |
 | Taiwan stocks | [Fugle](https://developer.fugle.tw/docs/pricing) | TWSE MIS |
 | US stocks | [Alpaca](https://docs.alpaca.markets/docs/about-market-data-api) (IEX only) | Yahoo Finance |
+| US pre-market and after-hours | Not available | Yahoo Finance |
 | European stocks | Not available | Yahoo Finance |
 | Korean stocks | Not available | Yahoo Finance |
 | Binance spot | Not needed | Binance |

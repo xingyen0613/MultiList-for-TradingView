@@ -3,9 +3,15 @@ import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import { setLanguage } from '../extension/lib/i18n.js';
 import {
+  EXTENDED_INTERVALS,
+  extendedHoursDue,
+  extendedHoursPhase,
+  fetchExtendedHours,
   fetchQuotes,
+  hasExtendedHours,
   parseAlpaca,
   parseBinance,
+  parseExtendedHours,
   parseFugle,
   parseKoreaSpark,
   parseMis,
@@ -55,6 +61,27 @@ test('parseYahooSpark reads a real response and keeps the Yahoo form', () => {
   assert.ok(quotes.get('BRK-B').price > 0);
 });
 
+test('parseYahooSpark shows the official close of US stocks before the open, not the pre-market price', () => {
+  // A real response at 07:17 in New York. fulldayPrice was 357.10 (AAPL) and 160.289 (NVDA).
+  const quotes = parseYahooSpark(fixture('yahoo-spark-prepost'));
+  assert.equal(quotes.get('AAPL').price, 355.63);
+  assert.ok(Math.abs(quotes.get('AAPL').change - (355.63 - 348.51)) < 1e-9);
+  assert.ok(Math.abs(quotes.get('AAPL').changePercent - 2.043) < 0.001);
+  assert.equal(quotes.get('NVDA').price, 173.73);
+  assert.ok(Math.abs(quotes.get('NVDA').changePercent - 2.923) < 0.001);
+});
+
+test('parseYahooSpark skips null closes and a row without bars', () => {
+  const quotes = parseYahooSpark({
+    AAPL: { close: [354.1, 355.63, null], previousClose: 348.51, fulldayPrice: 357.1 },
+    GONE: { close: [], previousClose: 10, fulldayPrice: 9 },
+    NOPREV: { close: [5] },
+  });
+  assert.equal(quotes.get('AAPL').price, 355.63);
+  assert.equal(quotes.has('GONE'), false);
+  assert.deepEqual(quotes.get('NOPREV'), { price: 5, change: null, changePercent: null });
+});
+
 test('parseYahooSpark reads a real response for European stocks', () => {
   const quotes = parseYahooSpark(fixture('yahoo-spark-europe'));
   for (const ticker of ['IFX.DE', 'SIVE.ST', 'IQE.L', 'VOLV-B.ST', 'BT-A.L']) {
@@ -65,8 +92,10 @@ test('parseYahooSpark reads a real response for European stocks', () => {
 
 test('parseKoreaSpark keeps the suffix with bars and drops the old price of the wrong suffix', () => {
   const quotes = parseKoreaSpark(fixture('yahoo-spark-korea'));
-  assert.deepEqual(quotes.get('005930'), { price: 189900, change: 1200, changePercent: 0.636 }); // KOSPI, .KS
-  assert.deepEqual(quotes.get('247540'), { price: 75900, change: -7200, changePercent: -8.664 }); // KOSDAQ, .KQ
+  const near = (quote, price, change, changePercent) =>
+    quote.price === price && quote.change === change && Math.abs(quote.changePercent - changePercent) < 0.001;
+  assert.ok(near(quotes.get('005930'), 189900, 1200, 0.636)); // KOSPI, .KS
+  assert.ok(near(quotes.get('247540'), 75900, -7200, -8.664)); // KOSDAQ, .KQ
   assert.equal(quotes.get('086520').price, 60600);
   assert.equal(quotes.size, 3);
 });
@@ -120,7 +149,7 @@ test('fetchQuotes splits Yahoo requests into chunks of 20', async () => {
   globalThis.fetch = async (url) => {
     const symbols = new URL(url).searchParams.get('symbols').split(',');
     requested.push(symbols.length);
-    return jsonResponse(Object.fromEntries(symbols.map((s) => [s, { fulldayPrice: 1 }])));
+    return jsonResponse(Object.fromEntries(symbols.map((s) => [s, { close: [1] }])));
   };
   const ids = Array.from({ length: 45 }, (_, i) => `NYSE:T${i}`);
   const { quotes } = await fetchQuotes(ids, {});
@@ -659,4 +688,110 @@ test('resolveSymbol goes on to the next exchange if one fails, and reports the f
   globalThis.fetch = async (url) =>
     new URL(url).hostname === 'api.bybit.com' ? jsonResponse({}, 403) : jsonResponse({ code: -1121 }, 400);
   await assert.rejects(resolveSymbol('MNTUSDT'), /查詢 MNTUSDT 失敗（HTTP 403）/);
+});
+
+// The fixture is AAPL on 2026-11-11, read at 02:00 New York time: the last bar is after hours.
+function chartWithBars(count, meta = {}) {
+  const json = structuredClone(fixture('yahoo-chart-prepost'));
+  const result = json.chart.result[0];
+  result.timestamp = result.timestamp.slice(0, count);
+  result.indicators.quote[0].close = result.indicators.quote[0].close.slice(0, count);
+  Object.assign(result.meta, meta);
+  return json;
+}
+
+test('parseExtendedHours reads the last after-hours trade of a real response', () => {
+  const quote = parseExtendedHours(fixture('yahoo-chart-prepost'));
+  assert.equal(quote.session, 'post');
+  assert.equal(quote.price, 356.3473);
+  assert.ok(Math.abs(quote.change - 0.7173) < 1e-9);
+  assert.ok(Math.abs(quote.changePercent - (0.7173 / 355.63) * 100) < 1e-9);
+  assert.equal(quote.time, 1794445193 * 1000);
+});
+
+test('parseExtendedHours reads a pre-market bar, and the change is from the last close', () => {
+  // Before the open the last close is the close of the day before.
+  const quote = parseExtendedHours(chartWithBars(3, { regularMarketPrice: 348.51 }));
+  assert.equal(quote.session, 'pre');
+  assert.equal(quote.price, 346.5428);
+  assert.ok(Math.abs(quote.change - (346.5428 - 348.51)) < 1e-9);
+});
+
+test('parseExtendedHours gives null during the regular session', () => {
+  // The 12th bar starts at 15:30, before the close.
+  assert.equal(parseExtendedHours(chartWithBars(12)), null);
+  // The 6th bar starts at 9:30, where the pre-market session ends.
+  assert.equal(parseExtendedHours(chartWithBars(6)), null);
+});
+
+test('parseExtendedHours keeps the last after-hours bar at 20:00:00', () => {
+  const json = chartWithBars(17);
+  json.chart.result[0].timestamp[16] = 1794445200;
+  assert.equal(parseExtendedHours(json).session, 'post');
+});
+
+test('parseExtendedHours gives null without extended-hours data or bars', () => {
+  assert.equal(parseExtendedHours(chartWithBars(17, { hasPrePostMarketData: false })), null);
+  assert.equal(parseExtendedHours(chartWithBars(0)), null);
+  assert.equal(parseExtendedHours({ chart: { result: null, error: { code: 'Not Found' } } }), null);
+  const json = chartWithBars(17);
+  json.chart.result[0].indicators.quote[0].close = json.chart.result[0].indicators.quote[0].close.map(() => null);
+  assert.equal(parseExtendedHours(json), null);
+});
+
+test('only US symbols have extended hours', () => {
+  assert.equal(hasExtendedHours('NASDAQ:AAPL'), true);
+  assert.equal(hasExtendedHours('NYSE:BRK.B'), true);
+  assert.equal(hasExtendedHours('TWSE:2330'), false);
+  assert.equal(hasExtendedHours('BINANCE:BTCUSDT'), false);
+});
+
+test('fetchExtendedHours asks the Yahoo chart for each US symbol and skips failed requests', async () => {
+  const requested = [];
+  globalThis.fetch = async (url) => {
+    const { pathname, searchParams } = new URL(url);
+    requested.push(decodeURIComponent(pathname.split('/').pop()));
+    assert.equal(searchParams.get('includePrePost'), 'true');
+    return pathname.endsWith('/NVDA') ? jsonResponse({}, 429) : jsonResponse(fixture('yahoo-chart-prepost'));
+  };
+  const quotes = await fetchExtendedHours(['NASDAQ:AAPL', 'NYSE:BRK.B', 'NASDAQ:NVDA', 'TWSE:2330']);
+  assert.deepEqual(requested, ['AAPL', 'BRK-B', 'NVDA']);
+  assert.deepEqual([...quotes.keys()], ['NASDAQ:AAPL', 'NYSE:BRK.B']);
+  assert.equal(quotes.get('NASDAQ:AAPL').session, 'post');
+});
+
+test('extendedHoursPhase follows New York time, with daylight saving time', () => {
+  const phase = (iso) => extendedHoursPhase(new Date(iso));
+  // November: New York is UTC-5.
+  assert.equal(phase('2026-11-12T08:59:00Z'), 'closed');
+  assert.equal(phase('2026-11-12T09:00:00Z'), 'extended');
+  assert.equal(phase('2026-11-12T14:29:00Z'), 'extended');
+  assert.equal(phase('2026-11-12T14:30:00Z'), 'regular');
+  assert.equal(phase('2026-11-12T20:59:00Z'), 'regular');
+  assert.equal(phase('2026-11-12T21:00:00Z'), 'extended');
+  assert.equal(phase('2026-11-13T00:59:00Z'), 'extended');
+  assert.equal(phase('2026-11-13T01:00:00Z'), 'closed');
+  // July: New York is UTC-4.
+  assert.equal(phase('2026-07-15T08:00:00Z'), 'extended');
+  assert.equal(phase('2026-07-15T13:30:00Z'), 'regular');
+  // Saturday and Sunday in New York.
+  assert.equal(phase('2026-11-14T15:00:00Z'), 'closed');
+  assert.equal(phase('2026-11-15T22:00:00Z'), 'closed');
+  assert.equal(EXTENDED_INTERVALS.extended, 0);
+});
+
+test('extendedHoursDue asks again for answers that are missing, from an earlier phase, or too old', () => {
+  const now = 10 * 60 * 60_000;
+  const known = new Map([
+    ['NASDAQ:AAPL', { quote: null, at: now - 60_000, phase: 'regular' }],
+    ['NASDAQ:NVDA', { quote: { session: 'post' }, at: now - 60_000, phase: 'closed' }],
+    ['NASDAQ:TSLA', { quote: null, at: now - EXTENDED_INTERVALS.regular, phase: 'regular' }],
+  ]);
+  const ids = ['NASDAQ:AAPL', 'NASDAQ:NVDA', 'NASDAQ:TSLA', 'NYSE:BRK.B', 'TWSE:2330', 'BINANCE:BTCUSDT'];
+  // AAPL is new enough. NVDA is from the night before the open, TSLA is old, and BRK.B has no answer.
+  assert.deepEqual(extendedHoursDue(ids, known, 'regular', now), ['NASDAQ:NVDA', 'NASDAQ:TSLA', 'NYSE:BRK.B']);
+  // During the pre-market and after-hours sessions every US symbol is asked each cycle.
+  const fresh = new Map(ids.map((id) => [id, { quote: null, at: now, phase: 'extended' }]));
+  assert.deepEqual(extendedHoursDue(ids, fresh, 'extended', now), ['NASDAQ:AAPL', 'NASDAQ:NVDA', 'NASDAQ:TSLA', 'NYSE:BRK.B']);
+  assert.deepEqual(extendedHoursDue(['TWSE:2330'], new Map(), 'closed', now), []);
 });

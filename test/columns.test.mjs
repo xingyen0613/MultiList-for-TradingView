@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  columnSettingsToSave,
   columnsTemplate,
+  DEFAULT_COLUMNS,
   DEFAULT_WIDTHS,
   MAX_WIDTH,
   MIN_SYMBOL_WIDTH,
   MIN_WIDTH,
+  readColumnSettings,
   resizeColumns,
   validWidths,
+  visibleWidths,
+  withVisibleWidths,
 } from '../extension/lib/columns.js';
 
 test('the first border changes only the price column, and the symbol column takes the rest', () => {
@@ -53,6 +58,33 @@ test('validWidths accepts only three widths inside the limits', () => {
   assert.equal(validWidths([76, 58, 'x']), false);
 });
 
-test('columnsTemplate lets the number columns shrink in a narrow panel', () => {
-  assert.equal(columnsTemplate([76, 58, 60]), 'minmax(48px, 1fr) minmax(0, 76px) minmax(0, 58px) minmax(0, 60px)');
+test('columnsTemplate lets the number columns shrink in a narrow panel, and ends with the button column', () => {
+  assert.equal(columnsTemplate([76, 58, 60]), 'minmax(48px, 1fr) minmax(0, 76px) minmax(0, 58px) minmax(0, 60px) 18px');
+});
+
+test('columnsTemplate leaves out hidden columns', () => {
+  assert.equal(columnsTemplate([76, 58, 60], ['price', 'percent']), 'minmax(48px, 1fr) minmax(0, 76px) minmax(0, 60px) 18px');
+  assert.equal(columnsTemplate([76, 58, 60], []), 'minmax(48px, 1fr) 18px');
+});
+
+test('a resize of the visible columns keeps the width of a hidden column', () => {
+  const visible = ['price', 'percent'];
+  assert.deepEqual(visibleWidths([76, 58, 60], visible), [76, 60]);
+  const part = resizeColumns(visibleWidths([76, 58, 60], visible), 1, 10, 150);
+  assert.deepEqual(withVisibleWidths([76, 58, 60], visible, part), [86, 58, 50]);
+});
+
+test('readColumnSettings gives the defaults for nothing saved or a bad value', () => {
+  assert.deepEqual(readColumnSettings(null), DEFAULT_COLUMNS);
+  assert.deepEqual(readColumnSettings({ hidden: 'change' }), DEFAULT_COLUMNS);
+  assert.deepEqual(readColumnSettings({ hidden: ['change', 'volume'] }), { visible: ['price', 'percent'], extendedHours: true });
+  assert.deepEqual(readColumnSettings({ hidden: [], extendedHours: false }), { visible: ['price', 'change', 'percent'], extendedHours: false });
+});
+
+test('columnSettingsToSave saves only a change from the defaults', () => {
+  assert.equal(columnSettingsToSave(DEFAULT_COLUMNS), null);
+  assert.deepEqual(columnSettingsToSave({ visible: ['percent', 'price'], extendedHours: true }), { hidden: ['change'], extendedHours: true });
+  assert.deepEqual(columnSettingsToSave({ visible: ['price', 'change', 'percent'], extendedHours: false }), { hidden: [], extendedHours: false });
+  const settings = { visible: ['change'], extendedHours: false };
+  assert.deepEqual(readColumnSettings(columnSettingsToSave(settings)), settings);
 });

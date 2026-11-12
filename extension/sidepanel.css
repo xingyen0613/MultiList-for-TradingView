@@ -29,7 +29,7 @@
   --pink-soft: #fdecf1;
   --strong-border: #c9cdd6;
   --shadow: 0 8px 24px rgba(19, 23, 34, 0.16);
-  --columns: minmax(0, 1fr) 76px 58px 60px;
+  --columns: minmax(48px, 1fr) minmax(0, 76px) minmax(0, 58px) minmax(0, 60px) 18px;
 }
 
 /* The two dark blocks must stay the same: one is the system dark mode, one is the Dark Mode preset
@@ -507,21 +507,76 @@ input {
   user-select: none;
 }
 
+/* The last column holds the column button in the header and the remove button in each row,
+   so neither covers a number. */
 .columns,
 .row {
   display: grid;
   grid-template-columns: var(--columns);
   align-items: center;
   column-gap: 4px;
-  padding: 0 10px;
+  padding: 0 4px 0 10px;
 }
 
 .columns {
-  padding-top: 4px;
-  padding-bottom: 4px;
+  padding-top: 3px;
+  padding-bottom: 3px;
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: 11px;
+}
+
+/* .columns raises these over the .icon-button rules further down. */
+.columns .columns-button {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.columns .columns-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.columns .columns-button[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* The column menu opens under the column button, which sets its top and right. */
+.columns-menu {
+  inset: auto;
+  width: 236px;
+}
+
+.menu-title {
+  margin: 0;
+  padding: 6px 12px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* A long label wraps instead of running into the note below it. */
+.menu-check {
+  height: auto;
+  min-height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.menu-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.menu-note {
+  margin: -4px 0 0;
+  padding: 0 12px 6px 36px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .cell {
@@ -720,14 +775,63 @@ input {
 }
 
 .row-remove {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  background: var(--hover);
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
   opacity: 0;
-  transform: translateY(-50%);
+}
+
+.row-remove svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* A US stock has a second line for its pre-market or after-hours price, under the same columns.
+   It shows only while there is such a price. */
+.row.extended {
+  row-gap: 1px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.row:not(.extended) .ext-label,
+.row:not(.extended) .ext {
+  display: none;
+}
+
+.ext-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ext-label svg {
+  width: 11px;
+  height: 11px;
+}
+
+.ext-label.pre svg {
+  color: var(--warn);
+}
+
+.ext-label.post svg {
+  color: var(--accent);
+}
+
+.cell.ext {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cell.ext.up {
+  color: var(--up);
+}
+
+.cell.ext.down {
+  color: var(--down);
 }
 
 .row:hover .row-remove,

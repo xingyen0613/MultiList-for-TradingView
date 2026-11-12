@@ -159,7 +159,7 @@ chrome.storage.sync keeps the user's watchlists (tabs, groups, symbols) and sett
 - *.tradingview.com: to find the user's open TradingView tabs and run the chart switch, symbol search and watchlist import described under scripting.
 - mis.twse.com.tw: quotes for Taiwan stocks.
 - api.fugle.tw: Taiwan stock quotes, only if the user enters their own Fugle API key.
-- query1.finance.yahoo.com: quotes for US, European and Korean stocks.
+- query1.finance.yahoo.com: quotes for US, European and Korean stocks, and US pre-market and after-hours prices.
 - data.alpaca.markets: US stock quotes, only if the user enters their own Alpaca API key.
 - data-api.binance.vision and fapi.binance.com: quotes for crypto spot pairs and perpetual futures.
 - api.bybit.com: Bybit quotes for crypto spot pairs and perpetual futures.
