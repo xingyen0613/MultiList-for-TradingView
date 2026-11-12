@@ -3,6 +3,7 @@
 // replaces anything.
 
 import { addSymbol, ALL_TAB, createGroup, createLooseGroup, looseGroup } from './groups.js';
+import { t } from './i18n.js';
 import { syncUsage } from './store.js';
 
 export const FORMAT = 'multilist';
@@ -39,7 +40,7 @@ export function exportFileName(date = new Date()) {
 }
 
 export function sizeError(bytes) {
-  return bytes > MAX_FILE_BYTES ? '檔案超過 1 MB，無法匯入。' : null;
+  return bytes > MAX_FILE_BYTES ? t('file.tooLarge') : null;
 }
 
 class Invalid extends Error {}
@@ -48,21 +49,21 @@ const fail = (message) => {
 };
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const shown = (value) => (typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)).slice(0, 60);
-const broken = (path) => fail(`檔案內容格式不對（${path}），無法匯入。`);
+const broken = (path) => fail(t('file.broken', { path }));
 
 function checkName(value, path, allowEmpty) {
   if (typeof value !== 'string') broken(path);
-  if (!allowEmpty && value.trim() === '') fail(`有分頁或分組沒有名稱（${path}），無法匯入。`);
-  if (value.length > MAX_NAME) fail(`名稱超過 ${MAX_NAME} 個字：「${value.slice(0, 20)}…」，無法匯入。`);
+  if (!allowEmpty && value.trim() === '') fail(t('file.noName', { path }));
+  if (value.length > MAX_NAME) fail(t('file.longName', { max: MAX_NAME, name: value.slice(0, 20) }));
   return value;
 }
 
 function checkSymbol(value, path) {
   if (!isObject(value)) broken(path);
-  if (typeof value.id !== 'string' || !SYMBOL.test(value.id)) fail(`代碼格式不對：「${shown(value.id)}」，無法匯入。`);
+  if (typeof value.id !== 'string' || !SYMBOL.test(value.id)) fail(t('file.badSymbol', { id: shown(value.id) }));
   const symbol = { id: value.id, name: checkName(value.name ?? '', `${path}.name`, true) };
   if (value.yahoo !== undefined) {
-    if (typeof value.yahoo !== 'string' || !YAHOO.test(value.yahoo)) fail(`代碼「${value.id}」的 Yahoo 代碼格式不對，無法匯入。`);
+    if (typeof value.yahoo !== 'string' || !YAHOO.test(value.yahoo)) fail(t('file.badYahoo', { id: value.id }));
     symbol.yahoo = value.yahoo;
   }
   return symbol;
@@ -78,8 +79,8 @@ function checkGroups(value, path, count) {
     if (!Array.isArray(item.symbols)) broken(`${at}.symbols`);
     count.groups += 1;
     count.symbols += item.symbols.length;
-    if (count.groups > MAX_GROUPS) fail(`檔案裡的分組超過 ${MAX_GROUPS} 個，無法匯入。`);
-    if (count.symbols > MAX_SYMBOLS) fail(`檔案裡的代碼超過 ${MAX_SYMBOLS} 個，無法匯入。`);
+    if (count.groups > MAX_GROUPS) fail(t('file.tooManyGroups', { max: MAX_GROUPS }));
+    if (count.symbols > MAX_SYMBOLS) fail(t('file.tooManySymbols', { max: MAX_SYMBOLS }));
     return {
       name: loose ? '' : checkName(item.name, `${at}.name`, false),
       loose,
@@ -98,12 +99,12 @@ export function parseExport(text) {
     try {
       data = JSON.parse(text);
     } catch {
-      fail('這個檔案不是 JSON 格式，無法匯入。');
+      fail(t('file.notJson'));
     }
-    if (!isObject(data) || data.format !== FORMAT) fail('這不是 MultiList 匯出的檔案。');
-    if (data.version !== VERSION) fail(`不支援這個檔案的版本（${shown(data.version)}），請先更新 MultiList。`);
+    if (!isObject(data) || data.format !== FORMAT) fail(t('file.notExport'));
+    if (data.version !== VERSION) fail(t('file.version', { version: shown(data.version) }));
     if (!Array.isArray(data.tabs)) broken('tabs');
-    if (data.tabs.length > MAX_TABS) fail(`檔案裡的分頁超過 ${MAX_TABS} 個，無法匯入。`);
+    if (data.tabs.length > MAX_TABS) fail(t('file.tooManyTabs', { max: MAX_TABS }));
     const count = { groups: 0, symbols: 0 };
     const tabs = data.tabs.map((tab, index) => {
       const at = `tabs[${index}]`;

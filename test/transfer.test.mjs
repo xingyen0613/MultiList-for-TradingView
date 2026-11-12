@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ALL_TAB } from '../extension/lib/groups.js';
-import { exportFileName, exportList, importList, MAX_FILE_BYTES, parseExport } from '../extension/lib/transfer.js';
+import { setLanguage } from '../extension/lib/i18n.js';
+import { exportFileName, exportList, importList, MAX_FILE_BYTES, parseExport, sizeError } from '../extension/lib/transfer.js';
 
 // A list with every kind of group: a custom tab with loose symbols and a group, a second tab,
 // loose symbols on the all tab, a group on the all tab only, and a European stock.
@@ -246,4 +247,17 @@ test('importList reports a list that would not fit in Chrome sync, without chang
 test('exportFileName uses the local date', () => {
   assert.equal(exportFileName(new Date(2026, 10, 9, 23, 59)), 'multilist-20261109.json');
   assert.equal(exportFileName(new Date(2027, 0, 5)), 'multilist-20270105.json');
+});
+
+test('import errors follow the panel language', () => {
+  setLanguage('en');
+  try {
+    assert.equal(parseExport('not json {').error, 'This file is not JSON, so it cannot be imported.');
+    assert.equal(parseExport('[]').error, 'This file was not exported from MultiList.');
+    assert.equal(sizeError(MAX_FILE_BYTES + 1), 'The file is larger than 1 MB, so it cannot be imported.');
+    assert.equal(sizeError(MAX_FILE_BYTES), null);
+  } finally {
+    setLanguage('zh-TW');
+  }
+  assert.equal(parseExport('[]').error, '這不是 MultiList 匯出的檔案。');
 });

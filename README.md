@@ -11,7 +11,7 @@ A Chrome side panel watchlist for people who chart on TradingView. Create as man
 
 This is an independent personal project. It is not affiliated with TradingView.
 
-The interface is in Traditional Chinese.
+The interface is in English and Traditional Chinese. It follows your browser language, and you can switch it in the **⋯** menu.
 
 ## Features
 
@@ -19,7 +19,7 @@ The interface is in Traditional Chinese.
 - Search by code or by company name, in English or Chinese. The results come from TradingView search, with all exchanges, spot pairs, perpetual contracts and futures.
 - Import your TradingView watchlists with one click. Each list becomes a tab, and each section becomes a group.
 - Prices for Taiwan stocks (TWSE, TPEx), US stocks, European stocks, Korean stocks (KOSPI, KOSDAQ), crypto spot pairs and perpetual contracts on Binance, Bybit, OKX, Bitget, Gate and MEXC, and KuCoin spot pairs. You can also add other symbols, for example other exchanges, futures, indices or forex. They show no price, but a click still opens the chart.
-- The **All** tab shows every group. A new install also has one custom tab, **分頁一**. Add more tabs with the **+** at the right end of the tab bar. You decide which groups go in each tab. A custom tab shows only its own groups, and these groups also show on **All**. Symbols that are not in a group show above the groups. On **All**, the symbols of a custom tab that are not in a group show under the name of that tab.
+- The **All** tab shows every group. A new install also has one custom tab, **Tab 1**. Add more tabs with the **+** at the right end of the tab bar. You decide which groups go in each tab. A custom tab shows only its own groups, and these groups also show on **All**. Symbols that are not in a group show above the groups. On **All**, the symbols of a custom tab that are not in a group show under the name of that tab.
 - Click the pencil at the right end of the tab bar to rename the current tab. Clear the name of **All** to go back to the default.
 - Click the × on a custom tab to delete it. The × shows on the current tab, and on another tab when you point at it. A popup asks before the delete. The groups of the tab, and its symbols that are not in a group, stay on **All**.
 - Drag a group header onto a tab to move the group there. Drop it on **All** to take it out of its custom tab.
@@ -30,9 +30,10 @@ The interface is in Traditional Chinese.
 - Groups and tabs sync through your Chrome account. Without sign-in, no server is needed.
 - Optional Google sign-in. When signed in, your lists also sync through the MultiList server to other browsers, for example Chrome and Edge. Without it, lists sync only through Chrome, as before.
 - If two computers both changed the lists, they merge automatically. You are asked which copy to keep only at the first sign-in, when the two lists differ. You can export this computer's list first.
-- Export and import (**匯出檔案…** and **從檔案匯入…** in the **⋯** menu at the top right). Export the whole list or the current tab to a JSON file (`multilist-YYYYMMDD.json`). An import adds to your lists and never overwrites anything. Use it to back up, to move to another computer, or to share a list.
-- Pick the background and text colors (**背景與文字顏色…** in the **⋯** menu). Light Mode and Dark Mode are one click away, or you can follow the system. The colors sync through your Chrome account.
-- Delete your account (**刪除帳號…** in the **⋯** menu). Your lists and account data on the server are deleted. The lists on this computer stay.
+- Export and import (**Export to file…** and **Import from file…** in the **⋯** menu at the top right). Export the whole list or the current tab to a JSON file (`multilist-YYYYMMDD.json`). An import adds to your lists and never overwrites anything. Use it to back up, to move to another computer, or to share a list.
+- Pick the background and text colors (**Background and text colors…** in the **⋯** menu). Light Mode and Dark Mode are one click away, or you can follow the system. The colors sync through your Chrome account.
+- English and Traditional Chinese interface. The panel follows the browser language: Traditional Chinese for a Chinese browser, English for any other language. To switch, pick **English** or **繁體中文** under **Language** in the **⋯** menu. The panel changes at once, and the choice syncs through your Chrome account. Names that you type, and names from TradingView or a quote source, stay as they are.
+- Delete your account (**Delete account…** in the **⋯** menu). Your lists and account data on the server are deleted. The lists on this computer stay.
 
 ## Install
 
@@ -46,13 +47,13 @@ The extension needs Chrome 117 or later.
 
 ## Use
 
-1. Click **新增代碼** (add symbol) at the top of the list. A symbol does not need a group. To sort symbols into groups, click **新增分組** (new group), or the **+** on a group header.
+1. Click **Add symbol** at the top of the list. A symbol does not need a group. To sort symbols into groups, click **New group**, or the **+** on a group header.
 2. Type a code or a name, for example `2330`, `台積電`, `AAPL` or `BTC`. Results from TradingView show below the box. Use the filter buttons to show one kind only, for example crypto.
-3. Click a result, or press ↑ or ↓ to mark one and press Enter. A result marked **無報價** has no price source, but you can still add it.
+3. Click a result, or press ↑ or ↓ to mark one and press Enter. A result marked **No quote** has no price source, but you can still add it.
 4. Click a row to open it on the chart.
 5. Press Esc to close the input box.
 
-The first time you open the panel, it offers Google sign-in once. Later, click the cloud at the top right (it shows only when you are not signed in), or **用 Google 登入** in the **⋯** menu. The **⋯** menu also has the TradingView import, export and import, API keys, colors, anonymous sharing, sign-out and account deletion.
+The first time you open the panel, it offers Google sign-in once. Later, click the cloud at the top right (it shows only when you are not signed in), or **Sign in with Google** in the **⋯** menu. The **⋯** menu also has the TradingView import, export and import, API keys, colors, anonymous sharing, sign-out and account deletion.
 
 The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930`, `BINANCE:SUIUSDT.P`, `BYBIT:MNTUSDT` or `OKX:SUIUSDT.P`. A plain crypto pair such as `MNTUSDT` is looked up on Binance first, then on Bybit, OKX, Bitget, Gate, KuCoin and MEXC, in that order. The first match is used. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
 
@@ -79,7 +80,7 @@ European stocks have prices on these exchanges:
 
 1. Open TradingView in Chrome and sign in.
 2. Click the download arrow at the top of the panel.
-3. Select the lists to import, then click **匯入**.
+3. Select the lists to import, then click **Import**.
 
 Each list becomes a new tab. Each `###` section of a list becomes a group in that tab. Symbols before the first section go to a group with the name of the list. The import looks up the names of Taiwan, US, European and Korean stocks, so a long list can take some seconds.
 
@@ -102,7 +103,7 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 | KuCoin spot | Not needed | KuCoin API |
 | MEXC spot and perpetual contracts | Not needed | MEXC API |
 
-Add keys under **報價 API key…** in the **⋯** menu at the top right. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
+Add keys under **Quote API keys…** in the **⋯** menu at the top right. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
 
 TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. A code that you type, and an imported symbol, use Yahoo or TWSE MIS to find the exchange and the name. A European search result uses Yahoo to find its Yahoo ticker.
 
@@ -112,7 +113,7 @@ The search and the import use TradingView. See the limits below.
 
 - If you do not sign in and do not agree to share, nothing is sent to the MultiList server.
 - If you sign in, the server stores your Google account ID, Google email, lists (with group and tab names), first-use date and account creation date. It is used to sync your lists, and kept until you delete your account.
-- Anonymous sharing (**匿名分享觀察清單**) is a separate option and is off by default. It sends symbol codes, salted-hash group and tab IDs, a random analytics ID and the extension version, with no names. It is never matched or merged with account data.
+- Anonymous sharing (**Share watchlist anonymously**) is a separate option and is off by default. It sends symbol codes, salted-hash group and tab IDs, a random analytics ID and the extension version, with no names. It is never matched or merged with account data.
 
 See the [privacy policy](docs/privacy.md) for details.
 

@@ -9,8 +9,8 @@ const ORDER_KEY = 'groupOrder';
 const GROUP_PREFIX = 'group:';
 const TAB_NAMES_KEY = 'tabNames';
 const CUSTOM_TABS_KEY = 'customTabs';
-// Same default as loadTabs in store.js.
-const DEFAULT_TABS = [{ id: 'tab1', name: '分頁一' }];
+// Same default as loadTabs in store.js. The side panel shows this name in its own language.
+export const DEFAULT_TABS = [{ id: 'tab1', name: '分頁一' }];
 
 const own = (object, key) => (Object.hasOwn(object, key) ? object[key] : undefined);
 

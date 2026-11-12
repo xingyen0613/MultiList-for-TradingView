@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { switchSymbolInPage } from '../extension/lib/chart-page.js';
+import { searchSymbolsInPage, switchSymbolInPage } from '../extension/lib/chart-page.js';
 
 class FakeKeyboardEvent extends Event {
   constructor(type, init) {
@@ -44,9 +44,12 @@ function fakePage({ hasButton = true, opensSearch = true, appliesEnter = true } 
 
 const realDocument = globalThis.document;
 const realKeyboardEvent = globalThis.KeyboardEvent;
+const realFetch = globalThis.fetch;
+
 afterEach(() => {
   globalThis.document = realDocument;
   globalThis.KeyboardEvent = realKeyboardEvent;
+  globalThis.fetch = realFetch;
 });
 
 function install(page) {
@@ -82,4 +85,22 @@ test('switchSymbolInPage still works when only its source text is copied', async
   const copy = new Function(`return (${switchSymbolInPage.toString()})`)();
   assert.equal(await copy('NASDAQ:NVDA'), true);
   assert.equal(results.applied, 'NASDAQ:NVDA');
+});
+
+test('searchSymbolsInPage asks for names in the panel language and reports a timeout as timeout', async () => {
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(new URL(url));
+    return { ok: true, json: async () => ({ symbols: [] }) };
+  };
+  assert.deepEqual(await searchSymbolsInPage('sui', '', 'en'), { json: { symbols: [] } });
+  assert.equal(urls[0].searchParams.get('lang'), 'en');
+  await searchSymbolsInPage('sui', 'crypto');
+  assert.equal(urls[1].searchParams.get('lang'), 'zh_TW');
+  assert.equal(urls[1].searchParams.get('search_type'), 'crypto');
+
+  globalThis.fetch = async () => {
+    throw Object.assign(new Error('signal timed out'), { name: 'TimeoutError' });
+  };
+  assert.deepEqual(await searchSymbolsInPage('sui', ''), { error: 'timeout' });
 });

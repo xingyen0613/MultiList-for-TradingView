@@ -3,30 +3,30 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>觀察清單</title>
+    <title data-i18n="app.title"></title>
     <link rel="stylesheet" href="sidepanel.css" />
     <script src="theme-boot.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <h1>觀察清單</h1>
+      <h1 data-i18n="app.title"></h1>
       <div id="topbar-actions">
         <span id="signin-hint" class="tip-anchor" hidden>
-          <button id="signin-button" type="button" class="icon-button cloud-alert" aria-label="登入以同步觀察清單" aria-describedby="signin-tip"></button>
+          <button id="signin-button" type="button" class="icon-button cloud-alert" data-i18n-label="topbar.signIn" aria-describedby="signin-tip"></button>
           <span id="signin-tip" class="tip tip-below" role="tooltip"></span>
         </span>
-        <button id="menu-button" type="button" class="icon-button" popovertarget="menu" aria-label="設定選單" aria-haspopup="menu"></button>
+        <button id="menu-button" type="button" class="icon-button" popovertarget="menu" data-i18n-label="menu.label" aria-haspopup="menu"></button>
       </div>
     </header>
-    <div id="menu" class="menu" popover role="menu" aria-label="設定選單"></div>
+    <div id="menu" class="menu" popover role="menu" data-i18n-label="menu.label"></div>
 
-    <nav id="market-tabs" class="tabs" aria-label="分頁"></nav>
+    <nav id="market-tabs" class="tabs" data-i18n-label="tabs.label"></nav>
 
     <div class="columns" aria-hidden="true">
-      <span>代碼</span>
-      <span class="cell">最新價</span>
-      <span class="cell">漲跌</span>
-      <span class="cell">漲跌%</span>
+      <span data-i18n="column.symbol"></span>
+      <span class="cell"><span data-i18n="column.price"></span></span>
+      <span class="cell"><span data-i18n="column.change"></span></span>
+      <span class="cell"><span data-i18n="column.percent"></span></span>
     </div>
 
     <main id="groups"></main>
@@ -35,7 +35,7 @@
     <footer class="statusbar">
       <span id="app-version"></span>
       <span aria-hidden="true">·</span>
-      <a id="privacy-link" target="_blank" rel="noopener">隱私權政策</a>
+      <a id="privacy-link" target="_blank" rel="noopener" data-i18n="privacy"></a>
       <span aria-hidden="true">·</span>
       <a class="contact" href="mailto:xingyen0613@gmail.com">xingyen0613@gmail.com</a>
       <span id="update-info" class="tip-anchor" hidden>
