@@ -2,7 +2,7 @@
 
 # 服務條款：MultiList for TradingView
 
-生效日期：2026-11-10
+生效日期：2026-11-12
 
 本條款適用於你使用 MultiList for TradingView（以下稱「本插件」）及其選擇性的登入與同步服務（以下稱「本服務」）。使用本插件，即表示你同意本條款。如果你不同意，請不要使用本插件。
 
@@ -24,7 +24,7 @@
 ## 3. 你的使用
 
 - 只能以合法目的使用本插件和本服務。
-- 請遵守 TradingView 和本插件為你的代碼使用的各報價來源（臺灣證券交易所、Yahoo Finance、Binance、Fugle、Alpaca）的條款。
+- 請遵守 TradingView 和本插件為你的代碼使用的各報價來源（臺灣證券交易所、Yahoo Finance、Binance、Bybit、OKX、Bitget、Gate、KuCoin、MEXC、Fugle、Alpaca）的條款。
 - 如果你輸入自己的 Fugle 或 Alpaca API key，本插件只會把它送到該報價來源。你要為這組 key 負責。
 - 不要攻擊本服務、讓本服務過載、嘗試取得未授予你的存取權，也不要透過本插件以外的方式向我們的伺服器送出請求。
 

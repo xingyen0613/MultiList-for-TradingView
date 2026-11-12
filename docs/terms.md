@@ -2,7 +2,7 @@
 
 # Terms of Service: MultiList for TradingView
 
-Effective date: 2026-11-10
+Effective date: 2026-11-12
 
 These terms apply when you use MultiList for TradingView ("the extension") and its optional sign-in and sync service ("the service"). By using the extension, you agree to these terms. If you do not agree, do not use the extension.
 
@@ -24,7 +24,7 @@ The extension is an unofficial tool. It is not affiliated with, endorsed by, or 
 ## 3. Your use
 
 - Use the extension and the service only for lawful purposes.
-- Follow the terms of TradingView and of each quote provider that the extension uses for your symbols (TWSE, Yahoo Finance, Binance, Fugle, Alpaca).
+- Follow the terms of TradingView and of each quote provider that the extension uses for your symbols (TWSE, Yahoo Finance, Binance, Bybit, OKX, Bitget, Gate, KuCoin, MEXC, Fugle, Alpaca).
 - If you enter your own Fugle or Alpaca API key, the extension sends it only to that provider. You are responsible for that key.
 - Do not attack or overload the service, try to get access that you are not given, or send requests to our server other than through the extension.
 

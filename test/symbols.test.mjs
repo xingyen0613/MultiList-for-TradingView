@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chartUrl, europeIdOf, isChartUrl, marketOf, parseInput, tickerOf } from '../extension/lib/symbols.js';
+import {
+  chartUrl,
+  europeIdOf,
+  isChartUrl,
+  isCryptoMarket,
+  marketOf,
+  parseInput,
+  showsExchange,
+  splitPair,
+  tickerOf,
+} from '../extension/lib/symbols.js';
 
 test('parseInput routes each input form to the right markets', () => {
   assert.deepEqual(parseInput('2330'), { ticker: '2330', markets: ['tw'] });
@@ -8,7 +18,10 @@ test('parseInput routes each input form to the right markets', () => {
   assert.deepEqual(parseInput(' aapl '), { ticker: 'AAPL', markets: ['us', 'eu'] });
   assert.deepEqual(parseInput('BRK-B'), { ticker: 'BRK.B', markets: ['us', 'eu'] });
   assert.deepEqual(parseInput('BRK.B'), { ticker: 'BRK.B', markets: ['us', 'eu'] });
-  assert.deepEqual(parseInput('btcusdt'), { ticker: 'BTCUSDT', markets: ['crypto', 'us'] });
+  assert.deepEqual(parseInput('btcusdt'), {
+    ticker: 'BTCUSDT',
+    markets: ['crypto', 'bybit', 'okx', 'bitget', 'gate', 'kucoin', 'mexc', 'us'],
+  });
   assert.deepEqual(parseInput('TWSE:2330'), { ticker: '2330', markets: ['tw'] });
   assert.deepEqual(parseInput('NYSE:TSM'), { ticker: 'TSM', markets: ['us'] });
   assert.deepEqual(parseInput('BINANCE:ETHUSDT'), { ticker: 'ETHUSDT', markets: ['crypto'] });
@@ -52,11 +65,39 @@ test('marketOf and tickerOf read a symbol id', () => {
 test('marketOf gives Binance perpetual contracts their own market, and null for exchanges with no quotes', () => {
   assert.equal(marketOf('BINANCE:SUIUSDT.P'), 'perp');
   assert.equal(marketOf('CBOE:VIX'), 'us');
-  for (const id of ['BYBIT:SUIUSDT', 'COINBASE:SUIUSD', 'CME:SUI1!', 'TVC:DXY', 'FX:EURUSD', 'HKEX:700']) {
+  for (const id of ['COINBASE:SUIUSD', 'WEEX:SUIUSDT', 'CME:SUI1!', 'TVC:DXY', 'FX:EURUSD', 'HKEX:700']) {
     assert.equal(marketOf(id), null, id);
   }
   assert.deepEqual(parseInput('binance:suiusdt.p'), { ticker: 'SUIUSDT.P', markets: ['perp'] });
-  assert.equal(parseInput('BYBIT:SUIUSDT'), null);
+  assert.equal(parseInput('WEEX:SUIUSDT'), null);
+});
+
+test('marketOf gives each other crypto exchange a spot market and a perpetual market', () => {
+  assert.equal(marketOf('BYBIT:MNTUSDT'), 'bybit');
+  assert.equal(marketOf('BYBIT:MNTUSDT.P'), 'bybit-perp');
+  assert.equal(marketOf('OKX:SUIUSDT.P'), 'okx-perp');
+  assert.equal(marketOf('BITGET:SUIUSDT'), 'bitget');
+  assert.equal(marketOf('GATE:MNTUSDT.P'), 'gate-perp');
+  assert.equal(marketOf('KUCOIN:MNTUSDT'), 'kucoin');
+  assert.equal(marketOf('MEXC:MNTUSDT.P'), 'mexc-perp');
+  assert.equal(marketOf('BITGET:SUIUSDT.P'), 'bitget-perp');
+  // The TradingView search shows no KuCoin perpetual contracts, so there is no source for them.
+  assert.equal(marketOf('KUCOIN:MNTUSDT.P'), null);
+  // Bitget and Gate have a source only for USDT perpetual contracts.
+  assert.equal(marketOf('BITGET:BTCUSD.P'), null);
+  assert.equal(marketOf('GATE:BTCUSDC.P'), null);
+  // A ticker that is not a pair, such as a dated contract, has no source.
+  assert.equal(marketOf('BYBIT:BTCUSDH2026'), null);
+  assert.equal(marketOf('OKX:BTCXYZ'), null);
+  assert.deepEqual(parseInput('bybit:mntusdt.p'), { ticker: 'MNTUSDT.P', markets: ['bybit-perp'] });
+  assert.deepEqual(parseInput('GATE:MNTUSDT'), { ticker: 'MNTUSDT', markets: ['gate'] });
+});
+
+test('isCryptoMarket and showsExchange tell Binance apart from the other crypto exchanges', () => {
+  for (const market of ['crypto', 'perp', 'bybit', 'okx-perp', 'kucoin']) assert.equal(isCryptoMarket(market), true, market);
+  for (const market of ['tw', 'us', 'eu', 'kr', null]) assert.equal(isCryptoMarket(market), false, market);
+  for (const id of ['BINANCE:SUIUSDT', 'BINANCE:SUIUSDT.P', 'NASDAQ:AAPL', 'TWSE:2330']) assert.equal(showsExchange(id), false, id);
+  for (const id of ['BYBIT:SUIUSDT', 'OKX:SUIUSDT.P', 'COINBASE:SUIUSD', 'CME:SUI1!']) assert.equal(showsExchange(id), true, id);
 });
 
 test('europeIdOf turns a Yahoo ticker into the TradingView form', () => {
@@ -92,4 +133,18 @@ test('chartUrl keeps the saved layout path and replaces the symbol', () => {
     chartUrl('NASDAQ:AAPL', 'https://example.com/'),
     'https://www.tradingview.com/chart/?symbol=NASDAQ%3AAAPL',
   );
+});
+
+test('splitPair finds the quote currency of a TradingView pair', () => {
+  assert.deepEqual(splitPair('MNTUSDT'), ['MNT', 'USDT']);
+  assert.deepEqual(splitPair('BTCFDUSD'), ['BTC', 'FDUSD']);
+  assert.deepEqual(splitPair('MNTUSD1'), ['MNT', 'USD1']);
+  assert.deepEqual(splitPair('BTCUSDE'), ['BTC', 'USDE']);
+  assert.deepEqual(splitPair('BTCUSD'), ['BTC', 'USD']);
+  assert.deepEqual(splitPair('USDCUSDT'), ['USDC', 'USDT']);
+  assert.deepEqual(splitPair('ETHBTC'), ['ETH', 'BTC']);
+  assert.deepEqual(splitPair('ETHBNB'), ['ETH', 'BNB']);
+  assert.deepEqual(splitPair('BTCDAI'), ['BTC', 'DAI']);
+  assert.equal(splitPair('USDT'), null);
+  assert.equal(splitPair('BTCXYZ'), null);
 });

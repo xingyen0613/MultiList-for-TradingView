@@ -13,6 +13,13 @@
     "https://query1.finance.yahoo.com/*",
     "https://data-api.binance.vision/*",
     "https://fapi.binance.com/*",
+    "https://api.bybit.com/*",
+    "https://www.okx.com/*",
+    "https://api.bitget.com/*",
+    "https://api.gateio.ws/*",
+    "https://api.kucoin.com/*",
+    "https://api.mexc.com/*",
+    "https://contract.mexc.com/*",
     "https://api.fugle.tw/*",
     "https://data.alpaca.markets/*"
   ],

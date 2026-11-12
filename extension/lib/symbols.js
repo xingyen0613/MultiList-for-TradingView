@@ -28,17 +28,66 @@ const EUROPE = {
 };
 const EUROPE_EXCHANGES = new Set(Object.values(EUROPE).map((item) => item.exchange));
 
+// Quote currencies of crypto pairs, longest first where one ends another, so BTCUSDT is not BTCU and SDT.
+const QUOTE_CURRENCIES = ['FDUSD', 'USDT', 'USDC', 'USDE', 'USD1', 'USD', 'DAI', 'BTC', 'ETH', 'BNB', 'EUR', 'TRY', 'BRL'];
+
+// MNTUSDT gives ['MNT', 'USDT']. Returns null for an unknown quote currency.
+export function splitPair(ticker) {
+  const quote = QUOTE_CURRENCIES.find((item) => ticker.endsWith(item) && ticker.length > item.length);
+  return quote ? [ticker.slice(0, -quote.length), quote] : null;
+}
+
+// Crypto exchanges other than Binance, in the order that a typed pair such as MNTUSDT is looked up.
+// perp is true for all perpetual contracts, 'USDT' for only the USDT ones, and false for none.
+// The TradingView search shows no KuCoin perpetual contracts. Tested on 2026-11-12.
+const CRYPTO_EXCHANGES = {
+  BYBIT: { name: 'Bybit', perp: true },
+  OKX: { name: 'OKX', perp: true },
+  BITGET: { name: 'Bitget', perp: 'USDT' },
+  GATE: { name: 'Gate', perp: 'USDT' },
+  KUCOIN: { name: 'KuCoin', perp: false },
+  MEXC: { name: 'MEXC', perp: true },
+};
+
+// Each of those exchanges has a spot market, for example bybit, and can have a perpetual market, for example bybit-perp.
+export const EXCHANGE_MARKETS = Object.entries(CRYPTO_EXCHANGES).flatMap(([exchange, { name, perp }]) => {
+  const spot = { market: exchange.toLowerCase(), exchange, name, perp: false, quote: null };
+  if (!perp) return [spot];
+  return [spot, { ...spot, market: `${spot.market}-perp`, perp: true, quote: perp === true ? null : perp }];
+});
+const SPOT_MARKETS = EXCHANGE_MARKETS.filter((item) => !item.perp).map((item) => item.market);
+
+// The market of a pair on one of those exchanges, or null.
+// A ticker that is not a pair, for example the dated contract BTCUSDH2026, has no market.
+function exchangeMarketOf(exchange, ticker, perp) {
+  const pair = splitPair(perp ? ticker.slice(0, -2) : ticker);
+  const item = EXCHANGE_MARKETS.find((each) => each.exchange === exchange && each.perp === perp);
+  if (!pair || !item || (item.quote && item.quote !== pair[1])) return null;
+  return item.market;
+}
+
 // Returns the market that has a quote source, or null. A symbol of another exchange,
-// for example BYBIT:SUIUSDT, can be in a group and open the chart, but has no quote.
-// TradingView writes a Binance perpetual contract as BINANCE:SUIUSDT.P.
+// for example COINBASE:SUIUSD, can be in a group and open the chart, but has no quote.
+// TradingView writes every exchange's pairs the same way: MNTUSDT for spot and MNTUSDT.P for a perpetual contract.
 export function marketOf(symbolId) {
   const [exchange, ticker = ''] = symbolId.split(':');
+  const perp = ticker.endsWith('.P');
   if (TAIWAN_EXCHANGES.has(exchange)) return 'tw';
   if (US_EXCHANGES.has(exchange)) return 'us';
   if (EUROPE_EXCHANGES.has(exchange)) return 'eu';
   if (exchange === 'KRX') return 'kr';
-  if (exchange === 'BINANCE') return ticker.endsWith('.P') ? 'perp' : 'crypto';
-  return null;
+  if (exchange === 'BINANCE') return perp ? 'perp' : 'crypto';
+  return exchangeMarketOf(exchange, ticker, perp);
+}
+
+export const isCryptoMarket = (market) =>
+  market === 'crypto' || market === 'perp' || EXCHANGE_MARKETS.some((item) => item.market === market);
+
+// A symbol shows its exchange in the list if it has no quote, or is on a crypto exchange other than Binance,
+// because BYBIT:SUIUSDT and BINANCE:SUIUSDT look the same.
+export function showsExchange(symbolId) {
+  const market = marketOf(symbolId);
+  return market === null || (isCryptoMarket(market) && !symbolId.startsWith('BINANCE:'));
 }
 
 // IFX.DE becomes XETR:IFX. Returns null if the exchange is not supported.
@@ -81,7 +130,7 @@ export function parseInput(raw) {
   const yahooForm = text.match(/^[A-Z0-9][A-Z0-9-]*\.([A-Z]{1,2})$/);
   if (yahooForm && EUROPE[yahooForm[1]]) return { ticker: text, markets: ['eu'], yahoo: [text] };
   if (/^\d{4,6}[A-Z]?$/.test(text)) return { ticker: text, markets: ['tw'] };
-  if (CRYPTO_PAIR.test(text)) return { ticker: text, markets: ['crypto', 'us'] };
+  if (CRYPTO_PAIR.test(text)) return { ticker: text, markets: ['crypto', ...SPOT_MARKETS, 'us'] };
   if (/^[A-Z][A-Z.-]{0,6}$/.test(text)) return { ticker: fromYahooTicker(text), markets: ['us', 'eu'] };
   return null;
 }

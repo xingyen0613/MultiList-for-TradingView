@@ -212,7 +212,7 @@ test('fetchQuotes asks no source for symbols without a market or a European symb
     asked.push(url);
     return jsonResponse({});
   };
-  const { quotes, status } = await fetchQuotes(['BYBIT:SUIUSDT', 'CME:SUI1!', 'XETR:IFX'], {});
+  const { quotes, status } = await fetchQuotes(['COINBASE:SUIUSD', 'CME:SUI1!', 'XETR:IFX'], {});
   assert.deepEqual(asked, []);
   assert.equal(quotes.size, 0);
   assert.deepEqual(status, []);
@@ -435,4 +435,213 @@ test('resolveSymbol explains each failure', async () => {
 
   globalThis.fetch = async () => jsonResponse({}, 429);
   await assert.rejects(resolveSymbol('AAPL'), /查詢 AAPL 失敗（HTTP 429）/);
+});
+
+// Real responses from 2026-11-12, keyed by market. The unknown: keys are answers for a pair that does not exist.
+const exchanges = fixture('crypto-exchanges');
+
+// The fixture key of a request. A request for the pair GONEXX gets the answer for an unknown pair.
+function fixtureKey(url) {
+  const { hostname, pathname, searchParams, search } = new URL(url);
+  const market = {
+    'api.bybit.com': searchParams.get('category') === 'linear' ? 'bybit-perp' : 'bybit',
+    'www.okx.com': searchParams.get('instId')?.endsWith('-SWAP') ? 'okx-perp' : 'okx',
+    'api.bitget.com': pathname.includes('/mix/') ? 'bitget-perp' : 'bitget',
+    'api.gateio.ws': pathname.includes('/futures/') ? 'gate-perp' : 'gate',
+    'api.kucoin.com': 'kucoin',
+    'api.mexc.com': 'mexc',
+    'contract.mexc.com': pathname.includes('/kline/') ? 'mexc-perp-bar' : 'mexc-perp',
+  }[hostname];
+  return search.includes('GONEXX') ? `unknown:${market}` : market;
+}
+
+// Answers each request with its fixture. Overrides replace the answer for a fixture key.
+function exchangeFetch(asked, overrides = {}) {
+  return async (url) => {
+    const { hostname, pathname } = new URL(url);
+    asked.push(`${hostname}${pathname}`);
+    const key = fixtureKey(url);
+    const answer = overrides[key] ?? exchanges[key];
+    return answer ? jsonResponse(answer.body, answer.status) : jsonResponse({ error: `no fixture for ${url}` }, 404);
+  };
+}
+
+const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-9, `${label}: ${actual} != ${expected}`);
+
+test('fetchQuotes reads real responses from each crypto exchange as a 24-hour change', async () => {
+  const asked = [];
+  globalThis.fetch = exchangeFetch(asked);
+  const ids = [
+    'BYBIT:MNTUSDT', 'BYBIT:MNTUSDT.P', 'OKX:SUIUSDT', 'OKX:SUIUSDT.P', 'BITGET:SUIUSDT', 'BITGET:SUIUSDT.P',
+    'GATE:MNTUSDT', 'GATE:MNTUSDT.P', 'KUCOIN:MNTUSDT', 'MEXC:MNTUSDT', 'MEXC:MNTUSDT.P',
+  ];
+  const { quotes, status } = await fetchQuotes(ids, {});
+  const row = (market) => exchanges[market].body;
+  // Each pair: the last price, and the price 24 hours ago.
+  const expected = {
+    'BYBIT:MNTUSDT': [row('bybit').result.list[0].lastPrice, row('bybit').result.list[0].prevPrice24h],
+    'BYBIT:MNTUSDT.P': [row('bybit-perp').result.list[0].lastPrice, row('bybit-perp').result.list[0].prevPrice24h],
+    'OKX:SUIUSDT': [row('okx').data[0].last, row('okx').data[0].open24h],
+    'OKX:SUIUSDT.P': [row('okx-perp').data[0].last, row('okx-perp').data[0].open24h],
+    'BITGET:SUIUSDT': [row('bitget').data[0].lastPr, row('bitget').data[0].open],
+    'BITGET:SUIUSDT.P': [row('bitget-perp').data[0].lastPr, row('bitget-perp').data[0].open24h],
+    'GATE:MNTUSDT.P': [row('gate-perp')[0].last, row('gate-perp')[0].last - row('gate-perp')[0].change_price],
+    'KUCOIN:MNTUSDT': [row('kucoin').data.last, row('kucoin').data.last - row('kucoin').data.changePrice],
+    'MEXC:MNTUSDT': [row('mexc').lastPrice, row('mexc').openPrice],
+    'MEXC:MNTUSDT.P': [row('mexc-perp').data.lastPrice, row('mexc-perp-bar').data.open[0]],
+  };
+  // Gate spot gives only a percentage. The change keeps the 4 decimals of the last price.
+  const gate = row('gate')[0];
+  const gateChange = Number((gate.last - gate.last / (1 + gate.change_percentage / 100)).toFixed(4));
+  assert.deepEqual(quotes.get('GATE:MNTUSDT'), { price: Number(gate.last), change: gateChange, changePercent: Number(gate.change_percentage) });
+  for (const [id, [last, previous]] of Object.entries(expected)) {
+    const quote = quotes.get(id);
+    assert.equal(quote.price, Number(last), id);
+    near(quote.change, Number(last) - Number(previous), id);
+    near(quote.changePercent, ((Number(last) - Number(previous)) / Number(previous)) * 100, id);
+  }
+  // Each symbol is one request, and a MEXC perpetual contract also asks for the bar 24 hours ago.
+  assert.equal(asked.length, ids.length + 1);
+  assert.deepEqual(
+    status.map((item) => `${item.market} ${item.source} ${item.errors.length}`),
+    ['bybit Bybit 0', 'bybit-perp Bybit 0', 'okx OKX 0', 'okx-perp OKX 0', 'bitget Bitget 0', 'bitget-perp Bitget 0', 'gate Gate 0',
+      'gate-perp Gate 0', 'kucoin KuCoin 0', 'mexc MEXC 0', 'mexc-perp MEXC 0'],
+  );
+});
+
+test('fetchQuotes sends each crypto exchange the pair in its own form', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { hostname, pathname, search } = new URL(url);
+    asked.push(`${hostname}${pathname}${search}`.replace(/start=\d+&end=\d+/, 'start=&end='));
+    return jsonResponse({}, 503);
+  };
+  await fetchQuotes(['BYBIT:BTCUSD.P', 'BYBIT:A&BUSDT', 'OKX:SUIUSDT.P', 'GATE:MNTUSDT.P', 'KUCOIN:MNTUSDT', 'MEXC:MNTUSDT.P'], {});
+  assert.deepEqual(asked.sort(), [
+    'api.bybit.com/v5/market/tickers?category=inverse&symbol=BTCUSD',
+    'api.bybit.com/v5/market/tickers?category=spot&symbol=A%26BUSDT',
+    'api.gateio.ws/api/v4/futures/usdt/tickers?contract=MNT_USDT',
+    'api.kucoin.com/api/v1/market/stats?symbol=MNT-USDT',
+    'contract.mexc.com/api/v1/contract/kline/MNT_USDT?interval=Min1&start=&end=',
+    'contract.mexc.com/api/v1/contract/ticker?symbol=MNT_USDT',
+    'www.okx.com/api/v5/market/ticker?instId=SUI-USDT-SWAP',
+  ]);
+});
+
+test('an unknown pair on a crypto exchange gets no quote and no error', async () => {
+  globalThis.fetch = exchangeFetch([]);
+  const ids = ['BYBIT:GONEXXUSDT', 'OKX:GONEXXUSDT.P', 'BITGET:GONEXXUSDT', 'GATE:GONEXXUSDT.P', 'KUCOIN:GONEXXUSDT', 'MEXC:GONEXXUSDT', 'MEXC:GONEXXUSDT.P'];
+  const { quotes, status } = await fetchQuotes(ids, {});
+  assert.equal(quotes.size, 0);
+  assert.deepEqual(status.flatMap((item) => item.errors), []);
+});
+
+test('a crypto exchange reports the error only if every request fails', async () => {
+  globalThis.fetch = async (url) => {
+    if (url.includes('MNTUSDT')) return jsonResponse(exchanges.bybit.body);
+    return jsonResponse({}, 503);
+  };
+  const some = await fetchQuotes(['BYBIT:MNTUSDT', 'BYBIT:SUIUSDT'], {});
+  assert.deepEqual([...some.quotes.keys()], ['BYBIT:MNTUSDT']);
+  assert.deepEqual(some.status, [{ market: 'bybit', source: 'Bybit', errors: [] }]);
+
+  const none = await fetchQuotes(['BYBIT:SUIUSDT'], {});
+  assert.deepEqual(none.status, [{ market: 'bybit', source: null, errors: ['Bybit: HTTP 503'] }]);
+});
+
+test('a MEXC perpetual contract keeps its price if the bar 24 hours ago fails', async () => {
+  globalThis.fetch = exchangeFetch([], { 'mexc-perp-bar': { body: {}, status: 500 } });
+  const { quotes } = await fetchQuotes(['MEXC:MNTUSDT.P'], {});
+  assert.deepEqual(quotes.get('MEXC:MNTUSDT.P'), {
+    price: exchanges['mexc-perp'].body.data.lastPrice,
+    change: null,
+    changePercent: null,
+  });
+});
+
+test('Bitget and Gate perpetual contracts that are not USDT get no request', async () => {
+  const asked = [];
+  globalThis.fetch = exchangeFetch(asked);
+  const { quotes } = await fetchQuotes(['BITGET:BTCUSD.P', 'GATE:BTCUSDC.P'], {});
+  assert.deepEqual(asked, []);
+  assert.equal(quotes.size, 0);
+});
+
+test('resolveSymbol looks a typed pair up on Binance first, then on the other exchanges in order', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { hostname } = new URL(url);
+    asked.push(hostname);
+    if (hostname === 'data-api.binance.vision') return jsonResponse({ code: -1121 }, 400);
+    if (hostname === 'api.bybit.com') return jsonResponse(exchanges['unknown:bybit'].body);
+    return jsonResponse(exchanges.okx.body);
+  };
+  assert.deepEqual(await resolveSymbol('MNTUSDT'), { id: 'OKX:MNTUSDT', name: '' });
+  assert.deepEqual(asked, ['data-api.binance.vision', 'api.bybit.com', 'www.okx.com']);
+});
+
+test('resolveSymbol checks the full form of another exchange only on that exchange', async () => {
+  const asked = [];
+  globalThis.fetch = exchangeFetch(asked);
+  assert.deepEqual(await resolveSymbol('gate:mntusdt.p'), { id: 'GATE:MNTUSDT.P', name: '' });
+  assert.deepEqual(asked, ['api.gateio.ws/api/v4/futures/usdt/tickers']);
+  await assert.rejects(resolveSymbol('KUCOIN:GONEXXUSDT'), /找不到 GONEXXUSDT/);
+});
+
+test('Gate spot keeps its percentage for a very low price', async () => {
+  globalThis.fetch = async () => jsonResponse([{ currency_pair: 'PEPE_USDT', last: '0.0000012', change_percentage: '5' }]);
+  const { quotes } = await fetchQuotes(['GATE:PEPEUSDT'], {});
+  assert.deepEqual(quotes.get('GATE:PEPEUSDT'), { price: 0.0000012, change: 0.0000001, changePercent: 5 });
+});
+
+test('a MEXC perpetual contract uses the first bar in the hour after 24 hours ago', async () => {
+  const asked = [];
+  globalThis.fetch = exchangeFetch(asked, {
+    'mexc-perp-bar': { body: { success: true, code: 0, data: { time: [1, 2], open: [0.5, 0.6] } }, status: 200 },
+  });
+  const before = Math.floor(Date.now() / 1000) - 86_400;
+  const { quotes } = await fetchQuotes(['MEXC:MNTUSDT.P'], {});
+  near(quotes.get('MEXC:MNTUSDT.P').change, exchanges['mexc-perp'].body.data.lastPrice - 0.5, 'change');
+  globalThis.fetch = async (url) => {
+    const { searchParams } = new URL(url);
+    if (url.includes('/kline/')) {
+      const [start, end] = [Number(searchParams.get('start')), Number(searchParams.get('end'))];
+      assert.ok(start >= before && start <= before + 5 && end === start + 3600, `${start} ${end}`);
+      return jsonResponse({ success: true, code: 0, data: { time: [], open: [] } });
+    }
+    return jsonResponse(exchanges['mexc-perp'].body);
+  };
+  const empty = await fetchQuotes(['MEXC:MNTUSDT.P'], {});
+  assert.equal(empty.quotes.get('MEXC:MNTUSDT.P').changePercent, null);
+});
+
+test('a crypto exchange gets at most 10 requests each second', async () => {
+  const started = [];
+  const t0 = Date.now();
+  globalThis.fetch = async () => {
+    started.push(Date.now() - t0);
+    return jsonResponse(exchanges.bybit.body);
+  };
+  const ids = Array.from({ length: 11 }, (_, i) => `BYBIT:COIN${i}USDT`);
+  const { quotes } = await fetchQuotes(ids, {});
+  assert.equal(quotes.size, 11);
+  assert.ok(started.slice(0, 10).every((ms) => ms < 500), started.join(','));
+  assert.ok(started[10] >= 1000, started.join(','));
+});
+
+test('resolveSymbol goes on to the next exchange if one fails, and reports the failure if none has the pair', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { hostname } = new URL(url);
+    asked.push(hostname);
+    if (hostname === 'data-api.binance.vision') return jsonResponse({ code: -1121 }, 400);
+    if (hostname === 'api.bybit.com') return jsonResponse({}, 403);
+    return jsonResponse(exchanges.okx.body);
+  };
+  assert.deepEqual(await resolveSymbol('MNTUSDT'), { id: 'OKX:MNTUSDT', name: '' });
+  assert.deepEqual(asked, ['data-api.binance.vision', 'api.bybit.com', 'www.okx.com']);
+
+  globalThis.fetch = async (url) =>
+    new URL(url).hostname === 'api.bybit.com' ? jsonResponse({}, 403) : jsonResponse({ code: -1121 }, 400);
+  await assert.rejects(resolveSymbol('MNTUSDT'), /查詢 MNTUSDT 失敗（HTTP 403）/);
 });

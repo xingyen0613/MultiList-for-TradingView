@@ -1,0 +1,443 @@
+{
+ "bybit": {
+  "status": 200,
+  "body": {
+   "retCode": 0,
+   "retMsg": "OK",
+   "result": {
+    "category": "spot",
+    "list": [
+     {
+      "symbol": "MNTUSDT",
+      "bid1Price": "0.4263",
+      "bid1Size": "765.37",
+      "ask1Price": "0.4264",
+      "ask1Size": "7081.33",
+      "lastPrice": "0.4263",
+      "prevPrice24h": "0.4301",
+      "price24hPcnt": "-0.0088",
+      "highPrice24h": "0.4302",
+      "lowPrice24h": "0.4174",
+      "turnover24h": "9192988.131052",
+      "volume24h": "21700023.6",
+      "usdIndexPrice": "0.425938"
+     }
+    ]
+   },
+   "retExtInfo": {},
+   "time": 1794417523588
+  }
+ },
+ "bybit-perp": {
+  "status": 200,
+  "body": {
+   "retCode": 0,
+   "retMsg": "OK",
+   "result": {
+    "category": "linear",
+    "list": [
+     {
+      "symbol": "MNTUSDT",
+      "lastPrice": "0.42610",
+      "indexPrice": "0.42629",
+      "markPrice": "0.42610",
+      "prevPrice24h": "0.42990",
+      "price24hPcnt": "-0.008839",
+      "highPrice24h": "0.42990",
+      "lowPrice24h": "0.41670",
+      "prevPrice1h": "0.42440",
+      "openInterest": "70660183.2",
+      "openInterestValue": "30108304.06",
+      "singleOpenInterest": "35330091.6",
+      "singleOpenInterestValue": "15054152.03",
+      "turnover24h": "7585472.8938",
+      "volume24h": "17922272.1000",
+      "fundingRate": "0.0001",
+      "nextFundingTime": "1794441600000",
+      "predictedDeliveryPrice": "",
+      "basisRate": "",
+      "deliveryFeeRate": "",
+      "deliveryTime": "0",
+      "ask1Size": "794.7",
+      "bid1Price": "0.42610",
+      "ask1Price": "0.42620",
+      "bid1Size": "1194.7",
+      "basis": "",
+      "preOpenPrice": "",
+      "preQty": "",
+      "curPreListingPhase": "",
+      "fundingIntervalHour": "8",
+      "basisRateYear": "",
+      "fundingCap": "0.02"
+     }
+    ]
+   },
+   "retExtInfo": {},
+   "time": 1794417523666
+  }
+ },
+ "okx": {
+  "status": 200,
+  "body": {
+   "code": "0",
+   "data": [
+    {
+     "instType": "SPOT",
+     "instId": "SUI-USDT",
+     "last": "0.851",
+     "lastSz": "117.1861",
+     "askPx": "0.8512",
+     "askSz": "1659.4498",
+     "bidPx": "0.851",
+     "bidSz": "1104.5147",
+     "open24h": "0.811",
+     "high24h": "0.851",
+     "low24h": "0.8057",
+     "volCcy24h": "8343852.3476488",
+     "vol24h": "10065284.4015",
+     "ts": "1794417523644",
+     "sodUtc0": "0.8241",
+     "sodUtc8": "0.8436"
+    }
+   ],
+   "msg": ""
+  }
+ },
+ "okx-perp": {
+  "status": 200,
+  "body": {
+   "code": "0",
+   "data": [
+    {
+     "instType": "SWAP",
+     "instId": "SUI-USDT-SWAP",
+     "last": "0.8498",
+     "lastSz": "1",
+     "askPx": "0.8499",
+     "askSz": "66",
+     "bidPx": "0.8498",
+     "bidSz": "12087",
+     "open24h": "0.8103",
+     "high24h": "0.8498",
+     "low24h": "0.8049",
+     "volCcy24h": "48818482",
+     "vol24h": "48818482",
+     "ts": "1794417523043",
+     "sodUtc0": "0.8233",
+     "sodUtc8": "0.8432"
+    }
+   ],
+   "msg": ""
+  }
+ },
+ "bitget": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "msg": "success",
+   "requestTime": 1794417523918,
+   "data": [
+    {
+     "open": "0.8107",
+     "symbol": "SUIUSDT",
+     "high24h": "0.8496",
+     "low24h": "0.8058",
+     "lastPr": "0.8501",
+     "quoteVolume": "5154669.6",
+     "baseVolume": "6224920.73",
+     "usdtVolume": "5154669.592942",
+     "ts": "1794417522566",
+     "bidPr": "0.85",
+     "askPr": "0.8501",
+     "bidSz": "1012.1",
+     "askSz": "67101.45",
+     "openUtc": "0.8242",
+     "changeUtc24h": "0.02997",
+     "change24h": "0.0486"
+    }
+   ]
+  }
+ },
+ "bitget-perp": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "msg": "success",
+   "requestTime": 1794417524007,
+   "data": [
+    {
+     "symbol": "SUIUSDT",
+     "lastPr": "0.8495",
+     "askPr": "0.8496",
+     "bidPr": "0.8494",
+     "bidSz": "488",
+     "askSz": "13523",
+     "high24h": "0.849",
+     "low24h": "0.8051",
+     "ts": "1794417524008",
+     "change24h": "0.04825",
+     "baseVolume": "27671529.7",
+     "quoteVolume": "22932131.03393",
+     "usdtVolume": "22932131.03393",
+     "openUtc": "0.8234",
+     "changeUtc24h": "0.03024",
+     "indexPrice": "0.849845652173913",
+     "fundingRate": "0.000096",
+     "holdingAmount": "56627239.7000000218",
+     "deliveryStartTime": null,
+     "deliveryTime": null,
+     "deliveryStatus": "",
+     "open24h": "0.8104",
+     "markPrice": "0.8488"
+    }
+   ]
+  }
+ },
+ "gate": {
+  "status": 200,
+  "body": [
+   {
+    "currency_pair": "MNT_USDT",
+    "last": "0.4262",
+    "lowest_ask": "0.4262",
+    "lowest_size": "1409.83",
+    "highest_bid": "0.4259",
+    "highest_size": "235.04",
+    "change_percentage": "-0.76",
+    "base_volume": "443432.41",
+    "quote_volume": "187801.618121",
+    "high_24h": "0.4295",
+    "low_24h": "0.4176"
+   }
+  ]
+ },
+ "gate-perp": {
+  "status": 200,
+  "body": [
+   {
+    "last": "0.4259",
+    "low_24h": "0.4171",
+    "high_24h": "0.4287",
+    "volume_24h": "288416",
+    "change_percentage": "-0.65",
+    "change_price": "-0.0028",
+    "funding_rate_indicative": "0.00005",
+    "index_price": "0.4254",
+    "volume_24h_base": "288416",
+    "volume_24h_quote": "122326",
+    "contract": "MNT_USDT",
+    "volume_24h_settle": "122326",
+    "funding_rate": "0.00005",
+    "mark_price": "0.4258",
+    "total_size": "385518",
+    "highest_bid": "0.4259",
+    "highest_size": "3570",
+    "lowest_ask": "0.4264",
+    "lowest_size": "439",
+    "quanto_multiplier": "1"
+   }
+  ]
+ },
+ "kucoin": {
+  "status": 200,
+  "body": {
+   "code": "200000",
+   "data": {
+    "time": 1794417523721,
+    "symbol": "MNT-USDT",
+    "buy": "0.4263",
+    "sell": "0.4265",
+    "changeRate": "-0.0093",
+    "changePrice": "-0.004",
+    "high": "0.4301",
+    "low": "0.4173",
+    "vol": "131441.3942",
+    "volValue": "55592.36206896",
+    "last": "0.4261",
+    "averagePrice": "0.42339916",
+    "takerFeeRate": "0.001",
+    "makerFeeRate": "0.001",
+    "takerCoefficient": "2",
+    "makerCoefficient": "2"
+   }
+  }
+ },
+ "mexc": {
+  "status": 200,
+  "body": {
+   "symbol": "MNTUSDT",
+   "priceChange": "-0.0041",
+   "priceChangePercent": "-0.0095",
+   "prevClosePrice": "0.43",
+   "lastPrice": "0.4259",
+   "bidPrice": "0.426",
+   "bidQty": "1082.13",
+   "askPrice": "0.4262",
+   "askQty": "4",
+   "openPrice": "0.43",
+   "highPrice": "0.4302",
+   "lowPrice": "0.4177",
+   "volume": "268681.73",
+   "quoteVolume": "113738.9293",
+   "openTime": 1794417483037,
+   "closeTime": 1794417524580,
+   "count": null
+  }
+ },
+ "mexc-perp": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "code": 0,
+   "data": {
+    "contractId": 450,
+    "symbol": "MNT_USDT",
+    "lastPrice": 0.4262,
+    "bid1": 0.4261,
+    "ask1": 0.4262,
+    "volume24": 67821,
+    "amount24": 287493.915,
+    "holdVol": 374216,
+    "lower24Price": 0.4174,
+    "high24Price": 0.4324,
+    "riseFallRate": 0.0101,
+    "riseFallValue": 0.0043,
+    "indexPrice": 0.4258,
+    "fairPrice": 0.4258,
+    "fundingRate": 0.0001,
+    "maxBidPrice": 0.5109,
+    "minAskPrice": 0.3406,
+    "timestamp": 1794417524026,
+    "riseFallRates": {
+     "zone": "UTC+8",
+     "r": 0.0101,
+     "v": 0.0043,
+     "r7": -0.1124,
+     "r30": -0.2274,
+     "r90": -0.061,
+     "r180": -0.3585,
+     "r365": -0.6618
+    },
+    "riseFallRatesOfTimezone": [
+     -0.0143,
+     0.004,
+     0.0101
+    ]
+   }
+  }
+ },
+ "mexc-perp-bar": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "code": 0,
+   "data": {
+    "time": [
+     1794331140
+    ],
+    "open": [
+     0.4298
+    ],
+    "close": [
+     0.4294
+    ],
+    "high": [
+     0.4299
+    ],
+    "low": [
+     0.4293
+    ],
+    "vol": [
+     14.0
+    ],
+    "amount": [
+     60.152
+    ],
+    "realOpen": [
+     0.4299
+    ],
+    "realClose": [
+     0.4294
+    ],
+    "realHigh": [
+     0.4299
+    ],
+    "realLow": [
+     0.4293
+    ]
+   }
+  }
+ },
+ "unknown:bybit": {
+  "status": 200,
+  "body": {
+   "retCode": 10001,
+   "retMsg": "Not supported symbols",
+   "result": {},
+   "retExtInfo": {},
+   "time": 1794417524912
+  }
+ },
+ "unknown:okx-perp": {
+  "status": 200,
+  "body": {
+   "code": "51001",
+   "data": [],
+   "msg": "Instrument ID, Instrument ID code, or Spread ID doesn't exist."
+  }
+ },
+ "unknown:bitget": {
+  "status": 400,
+  "body": {
+   "code": "40034",
+   "msg": "Parameter GONEXXUSDT does not exist",
+   "requestTime": 1794417525195,
+   "data": null
+  }
+ },
+ "unknown:gate-perp": {
+  "status": 400,
+  "body": {
+   "label": "CONTRACT_NOT_FOUND"
+  }
+ },
+ "unknown:kucoin": {
+  "status": 200,
+  "body": {
+   "code": "200000",
+   "data": {
+    "time": 1794417525472,
+    "symbol": "GONEXX-USDT",
+    "buy": null,
+    "sell": null,
+    "changeRate": null,
+    "changePrice": null,
+    "high": null,
+    "low": null,
+    "vol": null,
+    "volValue": null,
+    "last": null,
+    "averagePrice": null,
+    "takerFeeRate": null,
+    "makerFeeRate": null,
+    "takerCoefficient": null,
+    "makerCoefficient": null
+   }
+  }
+ },
+ "unknown:mexc": {
+  "status": 400,
+  "body": {
+   "msg": "invalid symbol",
+   "code": -1121
+  }
+ },
+ "unknown:mexc-perp": {
+  "status": 200,
+  "body": {
+   "success": false,
+   "code": 1001,
+   "message": "Contract does not exist"
+  }
+ }
+}

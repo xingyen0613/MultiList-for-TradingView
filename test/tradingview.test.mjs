@@ -21,7 +21,8 @@ test('parseSearch reads a real TradingView search for "sui"', () => {
   assert.equal(byId.get('BINANCE:SUIUSDT.P').kind, '永續合約');
   assert.equal(byId.get('BINANCE:SUIUSDT.P').quoted, true);
   // A result without a prefix uses its source id.
-  assert.equal(byId.get('OKX:SUIUSDT.P').quoted, false);
+  assert.equal(byId.get('OKX:SUIUSDT.P').quoted, true);
+  assert.equal(byId.get('CRYPTOCAP:SUI').quoted, false);
   assert.equal(byId.get('NYSE:SUI').kind, '股票');
   assert.equal(byId.get('NYSE:SUI').quoted, true);
   // This futures result lists only dated contracts, so it opens the first one.

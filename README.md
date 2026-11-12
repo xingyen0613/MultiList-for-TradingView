@@ -18,7 +18,7 @@ The interface is in Traditional Chinese.
 - Unlimited groups. A symbol can be in many groups, or in no group.
 - Search by code or by company name, in English or Chinese. The results come from TradingView search, with all exchanges, spot pairs, perpetual contracts and futures.
 - Import your TradingView watchlists with one click. Each list becomes a tab, and each section becomes a group.
-- Prices for Taiwan stocks (TWSE, TPEx), US stocks, European stocks, Korean stocks (KOSPI, KOSDAQ), Binance spot pairs and Binance perpetual contracts. You can also add other symbols, for example other exchanges, futures, indices or forex. They show no price, but a click still opens the chart.
+- Prices for Taiwan stocks (TWSE, TPEx), US stocks, European stocks, Korean stocks (KOSPI, KOSDAQ), crypto spot pairs and perpetual contracts on Binance, Bybit, OKX, Bitget, Gate and MEXC, and KuCoin spot pairs. You can also add other symbols, for example other exchanges, futures, indices or forex. They show no price, but a click still opens the chart.
 - The **All** tab shows every group. A new install also has one custom tab, **分頁一**. Add more tabs with the **+** at the right end of the tab bar. You decide which groups go in each tab. A custom tab shows only its own groups, and these groups also show on **All**. Symbols that are not in a group show above the groups. On **All**, the symbols of a custom tab that are not in a group show under the name of that tab.
 - Click the pencil at the right end of the tab bar to rename the current tab. Clear the name of **All** to go back to the default.
 - Click the × on a custom tab to delete it. The × shows on the current tab, and on another tab when you point at it. A popup asks before the delete. The groups of the tab, and its symbols that are not in a group, stay on **All**.
@@ -54,7 +54,7 @@ The extension needs Chrome 117 or later.
 
 The first time you open the panel, it offers Google sign-in once. Later, click the cloud at the top right (it shows only when you are not signed in), or **用 Google 登入** in the **⋯** menu. The **⋯** menu also has the TradingView import, export and import, API keys, colors, anonymous sharing, sign-out and account deletion.
 
-The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930` or `BINANCE:SUIUSDT.P`. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
+The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930`, `BINANCE:SUIUSDT.P`, `BYBIT:MNTUSDT` or `OKX:SUIUSDT.P`. A plain crypto pair such as `MNTUSDT` is looked up on Binance first, then on Bybit, OKX, Bitget, Gate, KuCoin and MEXC, in that order. The first match is used. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
 
 For a European stock that has the same ticker as a US stock, type the exchange. Use the TradingView form, for example `XETR:SAP`, or the Yahoo form, for example `SAP.DE`.
 
@@ -93,8 +93,14 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 | US stocks | [Alpaca](https://docs.alpaca.markets/docs/about-market-data-api) (IEX only) | Yahoo Finance |
 | European stocks | Not available | Yahoo Finance |
 | Korean stocks | Not available | Yahoo Finance |
-| Crypto | Not needed | Binance |
+| Binance spot | Not needed | Binance |
 | Binance perpetual contracts | Not needed | Binance futures API |
+| Bybit spot and perpetual contracts | Not needed | Bybit API |
+| OKX spot and perpetual contracts | Not needed | OKX API |
+| Bitget spot and USDT perpetual contracts | Not needed | Bitget API |
+| Gate spot and USDT perpetual contracts | Not needed | Gate API |
+| KuCoin spot | Not needed | KuCoin API |
+| MEXC spot and perpetual contracts | Not needed | MEXC API |
 
 Add keys under **報價 API key…** in the **⋯** menu at the top right. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
 

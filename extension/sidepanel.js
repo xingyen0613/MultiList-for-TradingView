@@ -33,14 +33,22 @@ import {
   tabsChanged,
 } from './lib/store.js';
 import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
-import { chartUrl, isChartUrl, marketOf, tickerOf } from './lib/symbols.js';
+import { chartUrl, EXCHANGE_MARKETS, isChartUrl, isCryptoMarket, marketOf, showsExchange, tickerOf } from './lib/symbols.js';
 import { contrast, hexToHsv, hsvToHex, parseHex, presetOf, PRESETS, THEME_KEY, themeColors, validTheme } from './lib/theme.js';
 import { LIST_LOCK, writeDiff } from './lib/sync.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
 import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
 const REFRESH_MS = 30_000;
-const MARKET_LABELS = { tw: '台股', us: '美股', eu: '歐股', kr: '韓股', crypto: '加密貨幣', perp: '幣安合約' };
+const MARKET_LABELS = {
+  tw: '台股',
+  us: '美股',
+  eu: '歐股',
+  kr: '韓股',
+  crypto: '幣安現貨',
+  perp: '幣安合約',
+  ...Object.fromEntries(EXCHANGE_MARKETS.map((item) => [item.market, `${item.name} ${item.perp ? '合約' : '現貨'}`])),
+};
 const SEARCH_TYPES = [
   ['', '全部'],
   ['stocks', '股票'],
@@ -812,8 +820,7 @@ function makeHeaderDropTarget(header, group, groupIndex) {
 
 function renderRow(group, symbol, symbolIndex) {
   const ticker = tickerOf(symbol.id);
-  // A symbol with no quote source shows its exchange, because BYBIT:SUIUSDT and BINANCE:SUIUSDT look the same.
-  const name = marketOf(symbol.id) ? symbol.name : [symbol.id.split(':')[0], symbol.name].filter(Boolean).join(' · ');
+  const name = showsExchange(symbol.id) ? [symbol.id.split(':')[0], symbol.name].filter(Boolean).join(' · ') : symbol.name;
   const row = el(
     'div',
     {
@@ -1062,10 +1069,10 @@ async function eachLimit(items, limit, task) {
 }
 
 // Keeps the TradingView symbol id and gets only the name, and the Yahoo ticker of a European stock.
-// Binance names are empty, and a symbol without a quote source has no lookup.
+// Crypto names are empty, and a symbol without a quote source has no lookup.
 async function importedSymbol(id) {
   const market = marketOf(id);
-  if (market === null || market === 'crypto' || market === 'perp') return { id, name: '' };
+  if (market === null || isCryptoMarket(market)) return { id, name: '' };
   const resolved = await resolveSymbol(id).catch(() => null);
   const symbol = { id, name: resolved?.name ?? '' };
   if (resolved?.yahoo) symbol.yahoo = resolved.yahoo;
