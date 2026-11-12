@@ -1,4 +1,4 @@
-# Chrome Web Store listing draft (0.2.0)
+# Chrome Web Store listing draft (0.3.0)
 
 Draft text for the Developer Dashboard. Field names follow the dashboard tabs. Check each field against the dashboard before submitting: the dashboard can change its field names.
 
