@@ -22,12 +22,9 @@
 
     <nav id="market-tabs" class="tabs" data-i18n-label="tabs.label"></nav>
 
-    <div class="columns" aria-hidden="true">
-      <span data-i18n="column.symbol"></span>
-      <span class="cell"><span data-i18n="column.price"></span></span>
-      <span class="cell"><span data-i18n="column.change"></span></span>
-      <span class="cell"><span data-i18n="column.percent"></span></span>
-    </div>
+    <!-- sidepanel.js draws the shown columns and the column button. -->
+    <div class="columns"></div>
+    <div id="columns-menu" class="menu columns-menu" popover role="dialog" data-i18n-label="columns.title"></div>
 
     <main id="groups"></main>
 

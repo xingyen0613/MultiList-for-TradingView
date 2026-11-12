@@ -44,6 +44,18 @@ export const MESSAGES = {
   'column.change': ['漲跌', 'Chg'],
   'column.percent': ['漲跌%', 'Chg%'],
   'column.resize': ['拖曳調整欄寬，按兩下還原預設', 'Drag to resize. Double-click to restore the default.'],
+  'columns.button': ['選擇顯示欄位', 'Choose columns'],
+  'columns.title': ['顯示欄位', 'Columns'],
+  'columns.extended': ['美股盤前盤後', 'US extended hours'],
+  'columns.extendedNote': [
+    '在美股下方多一行，跟著上面勾選的欄位顯示。其他市場不受影響。',
+    'Adds a line under US stocks with the columns above. Other markets stay the same.',
+  ],
+  'columns.reset': ['還原預設', 'Restore defaults'],
+  'columns.failed': ['欄位設定儲存失敗：{message}', 'Could not save the columns: {message}'],
+  'session.pre': ['盤前', 'Pre'],
+  'session.post': ['盤後', 'Post'],
+  'session.lastTrade': ['{session}最後成交 {time}', '{session}: last trade {time}'],
   privacy: ['隱私權政策', 'Privacy policy'],
 
   // Buttons used in many places.

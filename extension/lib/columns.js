@@ -1,7 +1,11 @@
 // Widths of the three number columns: last price, change, change percent.
-// The symbol column takes the rest of the row.
+// The symbol column takes the rest of the row. The user can hide any number column, and the
+// widths of hidden columns stay saved.
 
+export const COLUMNS = ['price', 'change', 'percent'];
 export const DEFAULT_WIDTHS = [76, 58, 60];
+// The last column holds the column button in the header and the remove button in each row.
+export const BUTTON_WIDTH = 18;
 export const MIN_WIDTH = 36;
 export const MAX_WIDTH = 200;
 export const MIN_SYMBOL_WIDTH = 48;
@@ -38,6 +42,33 @@ export function validWidths(widths) {
 }
 
 // A narrow panel makes the number columns narrower, so the row never gets wider than the panel.
-export function columnsTemplate(widths) {
-  return [`minmax(${MIN_SYMBOL_WIDTH}px, 1fr)`, ...widths.map((width) => `minmax(0, ${width}px)`)].join(' ');
+export function columnsTemplate(widths, visible = COLUMNS) {
+  const numbers = visibleWidths(widths, visible).map((width) => `minmax(0, ${width}px)`);
+  return [`minmax(${MIN_SYMBOL_WIDTH}px, 1fr)`, ...numbers, `${BUTTON_WIDTH}px`].join(' ');
+}
+
+// resizeColumns works on the visible columns. These two convert between them and all the columns.
+export const visibleWidths = (widths, visible) => visible.map((id) => widths[COLUMNS.indexOf(id)]);
+
+export function withVisibleWidths(widths, visible, part) {
+  const next = [...widths];
+  visible.forEach((id, i) => {
+    next[COLUMNS.indexOf(id)] = part[i];
+  });
+  return next;
+}
+
+// The saved choice is { hidden: [...], extendedHours: false }. Nothing saved means the defaults:
+// every column, and the US pre-market and after-hours line.
+export const DEFAULT_COLUMNS = { visible: COLUMNS, extendedHours: true };
+
+export function readColumnSettings(saved) {
+  const hidden = Array.isArray(saved?.hidden) ? saved.hidden : [];
+  return { visible: COLUMNS.filter((id) => !hidden.includes(id)), extendedHours: saved?.extendedHours !== false };
+}
+
+// Returns null for the defaults, so the saved item can be removed.
+export function columnSettingsToSave({ visible, extendedHours }) {
+  const hidden = COLUMNS.filter((id) => !visible.includes(id));
+  return hidden.length === 0 && extendedHours ? null : { hidden, extendedHours };
 }

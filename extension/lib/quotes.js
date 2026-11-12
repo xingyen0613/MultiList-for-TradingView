@@ -67,17 +67,18 @@ export function parseMis(json) {
   return quotes;
 }
 
+// The last close of the regular-session bars is the price: the live price during the session, and
+// the official close after it. The change is from the close of the session before. fulldayPrice is
+// not used, because for US stocks it also counts the pre-market, after-hours and overnight trades,
+// which the second line shows. Tested on 2026-11-12: before the open, the bars are those of the day
+// before, and the last close is the official close (AAPL 355.63, while fulldayPrice was 357.10).
 // The keys stay in the Yahoo form, for example BRK-B and VOLV-B.ST.
 export function parseYahooSpark(json) {
   const quotes = new Map();
   for (const [yahooTicker, row] of Object.entries(json)) {
-    const price = toNumber(row.fulldayPrice);
+    const price = toNumber((row.close ?? []).findLast((value) => toNumber(value) !== null));
     if (price === null) continue;
-    quotes.set(yahooTicker, {
-      price,
-      change: toNumber(row.fulldayChange),
-      changePercent: toNumber(row.fulldayChangePercent),
-    });
+    quotes.set(yahooTicker, quoteFromPrevious(price, toNumber(row.previousClose)));
   }
   return quotes;
 }
@@ -405,6 +406,88 @@ export async function fetchQuotes(symbolIds, keys, yahooTickers = new Map()) {
     quotes: new Map(results.flatMap((result) => result.quotes)),
     status: results.map(({ market, source, errors }) => ({ market, source, errors })),
   };
+}
+
+// US pre-market and after-hours prices. Only the Yahoo chart has them: spark answers HTTP 400 with
+// includePrePost, and v7/finance/quote answers 401. Tested on 2026-11-12: only US stocks have
+// hasPrePostMarketData, and the chart has no overnight trades (20:00 to 04:00 New York time).
+const EXTENDED_CHUNK = 20;
+
+export const hasExtendedHours = (symbolId) => marketOf(symbolId) === 'us';
+
+// Reads the last bar of the day. Returns { session: 'pre' or 'post', price, change, changePercent,
+// time } if that bar is in the pre-market or after-hours session, or null if it is in the regular
+// session. The change is from the last regular close, which the last price column shows outside
+// the regular session. The last after-hours bar can start at 20:00:00, the end of the session.
+export function parseExtendedHours(json) {
+  const result = json?.chart?.result?.[0];
+  const meta = result?.meta;
+  if (!meta?.hasPrePostMarketData) return null;
+  const times = result.timestamp ?? [];
+  const closes = result.indicators?.quote?.[0]?.close ?? [];
+  let index = closes.length - 1;
+  while (index >= 0 && toNumber(closes[index]) === null) index -= 1;
+  if (index < 0 || !Number.isFinite(times[index])) return null;
+  const time = times[index];
+  const periods = (name) => (meta.tradingPeriods?.[name] ?? []).flat();
+  const pre = periods('pre').some((period) => time >= period.start && time < period.end);
+  const post = periods('post').some((period) => time >= period.start && time <= period.end);
+  if (!pre && !post) return null;
+  const quote = quoteFromPrevious(toNumber(closes[index]), toNumber(meta.regularMarketPrice));
+  return { session: pre ? 'pre' : 'post', ...quote, time: time * 1000 };
+}
+
+// Returns a Map of symbol id to the parsed price or null. Only US symbols are asked. A failed
+// request leaves its symbol out, so the panel keeps the price it has.
+export async function fetchExtendedHours(symbolIds) {
+  const quotes = new Map();
+  for (const part of chunk(symbolIds.filter(hasExtendedHours), EXTENDED_CHUNK)) {
+    const results = await Promise.allSettled(
+      part.map((id) =>
+        fetchJson(
+          `${YAHOO}/v8/finance/chart/${encodeURIComponent(toYahooTicker(tickerOf(id)))}?range=1d&interval=60m&includePrePost=true`,
+        ),
+      ),
+    );
+    part.forEach((id, i) => {
+      if (results[i].status === 'fulfilled') quotes.set(id, parseExtendedHours(results[i].value));
+    });
+  }
+  return quotes;
+}
+
+// The time in New York decides how often the prices can change. During the pre-market and
+// after-hours sessions they change each cycle. During the regular session they are asked slowly,
+// only to find a holiday or an early close. At night and at weekends the last after-hours price stays.
+export const EXTENDED_INTERVALS = { extended: 0, regular: 5 * 60_000, closed: 30 * 60_000 };
+
+// The US symbols to ask for again. Each answer keeps the time and the phase it was asked in, so a
+// symbol on another tab is asked again when its answer is from an earlier phase or is too old.
+export function extendedHoursDue(symbolIds, known, phase, now) {
+  return symbolIds.filter((id) => {
+    if (!hasExtendedHours(id)) return false;
+    const answer = known.get(id);
+    return !answer || answer.phase !== phase || now - answer.at >= EXTENDED_INTERVALS[phase];
+  });
+}
+
+export function extendedHoursPhase(date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return 'closed';
+  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+  if (minutes >= 9 * 60 + 30 && minutes < 16 * 60) return 'regular';
+  if (minutes >= 4 * 60 && minutes < 20 * 60) return 'extended';
+  return 'closed';
 }
 
 // Resolvers return { id, name }, or null if the ticker does not exist.

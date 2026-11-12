@@ -10,6 +10,8 @@ const CURRENT_TAB_KEY = 'currentTab';
 const TAB_NAMES_KEY = 'tabNames';
 const CUSTOM_TABS_KEY = 'customTabs';
 const COLUMN_WIDTHS_KEY = 'columnWidths';
+// The shown columns sync, like the theme: they are a choice, not a size of this screen.
+export const COLUMNS_KEY = 'columns';
 
 export async function loadGroups() {
   const data = await chrome.storage.sync.get(null);
@@ -81,6 +83,17 @@ export async function loadColumnWidths() {
 
 export async function saveColumnWidths(widths) {
   await chrome.storage.local.set({ [COLUMN_WIDTHS_KEY]: widths });
+}
+
+export async function loadColumnSettings() {
+  const data = await chrome.storage.sync.get(COLUMNS_KEY);
+  return data[COLUMNS_KEY] ?? null;
+}
+
+// null means the defaults, so the item is removed.
+export async function saveColumnSettings(value) {
+  if (value === null) await chrome.storage.sync.remove(COLUMNS_KEY);
+  else await chrome.storage.sync.set({ [COLUMNS_KEY]: value });
 }
 
 export async function loadCurrentTab() {

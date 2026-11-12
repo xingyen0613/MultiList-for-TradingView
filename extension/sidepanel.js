@@ -1,5 +1,16 @@
 import { readWatchlistsInPage, searchSymbolsInPage, switchSymbolInPage } from './lib/chart-page.js';
-import { columnsTemplate, DEFAULT_WIDTHS, resizeColumns, validWidths } from './lib/columns.js';
+import {
+  columnSettingsToSave,
+  COLUMNS,
+  columnsTemplate,
+  DEFAULT_COLUMNS,
+  DEFAULT_WIDTHS,
+  readColumnSettings,
+  resizeColumns,
+  validWidths,
+  visibleWidths,
+  withVisibleWidths,
+} from './lib/columns.js';
 import { directionOf, formatChange, formatDateTime, formatPercent, formatPrice, formatTime } from './lib/format.js';
 import {
   addSymbol,
@@ -20,13 +31,23 @@ import { isSignInAvailable, loadAccount, SignInCancelled, signIn, signOut } from
 import { PRIVACY_URLS } from './lib/config.js';
 import { getLanguage, LANGUAGE_KEY, LANGUAGE_NAMES, LANGUAGES, pickLanguage, setLanguage, t } from './lib/i18n.js';
 import { DEFAULT_TABS, docFromItems, docsEqual, mergeDocs, normalizeDoc } from './lib/merge.js';
-import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
+  extendedHoursDue,
+  extendedHoursPhase,
+  fetchExtendedHours,
+  fetchQuotes,
+  hasExtendedHours,
+  resolveSymbol,
+} from './lib/quotes.js';
+import {
+  COLUMNS_KEY,
+  loadColumnSettings,
   loadColumnWidths,
   loadCurrentTab,
   loadGroups,
   loadKeys,
   loadTabs,
+  saveColumnSettings,
   saveColumnWidths,
   saveCurrentTab,
   saveKeys,
@@ -79,6 +100,8 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   blank: '',
   moon: '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>',
+  columns3: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
+  rotateCcw: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
 };
 
 // The search keeps its type after a symbol is added, so the next search finds the same kind.
@@ -94,6 +117,11 @@ const state = {
   tabSaving: 0,
   tabEdits: 0,
   columnWidths: DEFAULT_WIDTHS,
+  columnSettings: DEFAULT_COLUMNS,
+  // US pre-market and after-hours answers by symbol id: { quote, at, phase }. A null quote means the
+  // symbol is in its regular session.
+  extended: new Map(),
+  extendedPhase: extendedHoursPhase(new Date()),
   quotes: new Map(),
   keys: {},
   selected: null,
@@ -746,18 +774,49 @@ function selectSymbol(symbolId) {
   requestChart(symbolId);
 }
 
-function paintRow(row) {
-  const quote = state.quotes.get(row.dataset.symbol);
+const COLUMN_LABELS = { price: 'column.price', change: 'column.change', percent: 'column.percent' };
+const SESSION_LABELS = { pre: 'session.pre', post: 'session.post' };
+
+// Fills the cells of the shown columns. prefix is '' for the main line and 'ext-' for the line below.
+function paintCells(row, prefix, quote) {
+  const texts = {
+    price: formatPrice(quote?.price),
+    change: formatChange(quote?.change, quote?.price),
+    percent: formatPercent(quote?.changePercent),
+  };
   const direction = directionOf(quote?.change ?? 0);
-  row.querySelector('.price').textContent = formatPrice(quote?.price);
-  for (const [selector, text] of [
-    ['.change', formatChange(quote?.change, quote?.price)],
-    ['.percent', formatPercent(quote?.changePercent)],
-  ]) {
-    const cell = row.querySelector(selector);
-    cell.textContent = text;
-    cell.className = `cell ${selector.slice(1)} ${direction}`;
+  for (const id of COLUMNS) {
+    const cell = row.querySelector(`.${prefix}${id}`);
+    if (!cell) continue;
+    cell.textContent = texts[id];
+    cell.classList.toggle('up', id !== 'price' && direction === 'up');
+    cell.classList.toggle('down', id !== 'price' && direction === 'down');
   }
+}
+
+// A pre-market price is old once the regular session starts, so it shows only before the open.
+// An after-hours price can show during the regular session on a holiday or after an early close.
+// An answer from an earlier phase is not shown, so a tab that was not open waits for its new answer.
+function shownExtended(symbolId) {
+  const answer = state.extended.get(symbolId);
+  if (!answer?.quote || answer.phase !== state.extendedPhase) return null;
+  const { quote } = answer;
+  if (quote.session === 'pre' && state.extendedPhase === 'regular') return null;
+  return quote;
+}
+
+function paintRow(row) {
+  paintCells(row, '', state.quotes.get(row.dataset.symbol));
+  const label = row.querySelector('.ext-label');
+  if (!label) return;
+  const quote = shownExtended(row.dataset.symbol);
+  row.classList.toggle('extended', quote !== null);
+  if (!quote) return;
+  const session = t(SESSION_LABELS[quote.session]);
+  label.className = `ext-label ${quote.session}`;
+  label.title = t('session.lastTrade', { session, time: formatDateTime(new Date(quote.time)) });
+  label.replaceChildren(svgIcon(quote.session === 'pre' ? 'sun' : 'moon'), session);
+  paintCells(row, 'ext-', quote);
 }
 
 function clearDropMarks() {
@@ -852,9 +911,7 @@ function renderRow(group, symbol, symbolIndex) {
       el('span', { class: 'ticker' }, ticker),
       el('span', { class: 'name', title: name }, name),
     ),
-    el('span', { class: 'cell price' }),
-    el('span', { class: 'cell change' }),
-    el('span', { class: 'cell percent' }),
+    ...state.columnSettings.visible.map((id) => el('span', { class: `cell ${id}` })),
     iconButton(
       'close',
       t('symbol.remove', { group: groupTitle(group), ticker }),
@@ -862,6 +919,14 @@ function renderRow(group, symbol, symbolIndex) {
       'row-remove',
     ),
   );
+  // A US stock gets a second line for its pre-market or after-hours price. It shows only while there is one.
+  const { visible, extendedHours } = state.columnSettings;
+  if (extendedHours && visible.length > 0 && hasExtendedHours(symbol.id)) {
+    row.append(
+      el('span', { class: 'ext-label' }),
+      ...visible.map((id) => el('span', { class: `cell ext ext-${id}` })),
+    );
+  }
   paintRow(row);
   makeDraggable(row, { kind: 'symbol', groupId: group.id, symbolId: symbol.id });
   makeRowDropTarget(row, group, symbolIndex);
@@ -1378,6 +1443,20 @@ let refreshing = false;
 let refreshAgain = false;
 let lastFetched = new Set();
 
+// Asks for the US symbols whose pre-market or after-hours price is missing, from an earlier phase,
+// or older than the interval of the phase. Nothing is asked while the line is off, and an answer
+// that arrives after the line was turned off is dropped.
+async function refreshExtended(symbolIds) {
+  if (!state.columnSettings.extendedHours) return;
+  const phase = state.extendedPhase;
+  const at = Date.now();
+  const asked = extendedHoursDue(symbolIds, state.extended, phase, at);
+  if (asked.length === 0) return;
+  const quotes = await fetchExtendedHours(asked);
+  if (!state.columnSettings.extendedHours) return;
+  for (const [id, quote] of quotes) state.extended.set(id, { quote, at, phase });
+}
+
 // Runs one fetch at a time. A request during a fetch runs again after that fetch ends.
 // European symbols keep the Yahoo ticker that the quotes need.
 function yahooTickers() {
@@ -1396,7 +1475,12 @@ async function refresh() {
   try {
     const symbolIds = visibleSymbolIds(state.groups, state.tab);
     lastFetched = new Set(symbolIds);
-    const { quotes, status } = await fetchQuotes(symbolIds, state.keys, yahooTickers());
+    state.extendedPhase = extendedHoursPhase(new Date());
+    // The extended-hours prices are extra, so a failure there does not stop the quotes.
+    const [{ quotes, status }] = await Promise.all([
+      fetchQuotes(symbolIds, state.keys, yahooTickers()),
+      refreshExtended(symbolIds).catch((error) => console.error(error)),
+    ]);
     for (const [id, quote] of quotes) state.quotes.set(id, quote);
     state.sourceStatus = status;
     if (quotes.size > 0) state.updatedAt = new Date();
@@ -1924,15 +2008,15 @@ function applyTabs({ names, custom }) {
 
 function applyColumnWidths(widths) {
   state.columnWidths = widths;
-  document.documentElement.style.setProperty('--columns', columnsTemplate(widths));
+  document.documentElement.style.setProperty('--columns', columnsTemplate(widths, state.columnSettings.visible));
 }
 
-// The width of the widest number in each column on the screen.
+// The width of the widest number in each shown column, on both lines of the rows.
 function numberWidths() {
   const range = document.createRange();
-  return ['price', 'change', 'percent'].map((name) => {
+  return state.columnSettings.visible.map((id) => {
     let widest = 0;
-    for (const cell of groupsContainer.querySelectorAll(`.row .${name}`)) {
+    for (const cell of groupsContainer.querySelectorAll(`.row .${id}, .row .ext-${id}`)) {
       range.selectNodeContents(cell);
       widest = Math.max(widest, Math.ceil(range.getBoundingClientRect().width));
     }
@@ -1940,46 +2024,175 @@ function numberWidths() {
   });
 }
 
-// Each number column header has a line on its left. Drag the line to move it.
+// The line on the left of a number column header. Drag the line to move it.
 // Double-click a line to go back to the default widths.
-function setUpColumns(saved) {
-  applyColumnWidths(validWidths(saved) ? saved : DEFAULT_WIDTHS);
-  const header = document.querySelector('.columns');
-  const symbolHeader = header.firstElementChild;
-  header.querySelectorAll('.cell').forEach((cell, index) => {
-    const handle = el('span', { class: 'col-resize', title: t('column.resize'), dataset: { i18nTitle: 'column.resize' } });
-    handle.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      handle.setPointerCapture(event.pointerId);
-      const start = {
-        x: event.clientX,
-        widths: state.columnWidths,
-        symbol: symbolHeader.getBoundingClientRect().width,
-        mins: numberWidths(),
-      };
-      document.body.classList.add('resizing-columns');
-      handle.classList.add('dragging');
-      const move = (moveEvent) =>
-        applyColumnWidths(resizeColumns(start.widths, index, moveEvent.clientX - start.x, start.symbol, start.mins));
-      const end = () => {
-        handle.removeEventListener('pointermove', move);
-        handle.removeEventListener('pointerup', end);
-        handle.removeEventListener('pointercancel', end);
-        document.body.classList.remove('resizing-columns');
-        handle.classList.remove('dragging');
-        if (state.columnWidths !== start.widths) saveColumnWidths(state.columnWidths);
-      };
-      handle.addEventListener('pointermove', move);
-      handle.addEventListener('pointerup', end);
-      handle.addEventListener('pointercancel', end);
-    });
-    handle.addEventListener('dblclick', () => {
-      applyColumnWidths(DEFAULT_WIDTHS);
-      saveColumnWidths(DEFAULT_WIDTHS);
-    });
-    cell.append(handle);
+function resizeHandle(index, symbolHeader) {
+  const handle = el('span', { class: 'col-resize', title: t('column.resize'), dataset: { i18nTitle: 'column.resize' } });
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    const { visible } = state.columnSettings;
+    const start = {
+      x: event.clientX,
+      widths: state.columnWidths,
+      symbol: symbolHeader.getBoundingClientRect().width,
+      mins: numberWidths(),
+    };
+    document.body.classList.add('resizing-columns');
+    handle.classList.add('dragging');
+    const move = (moveEvent) => {
+      const part = resizeColumns(visibleWidths(start.widths, visible), index, moveEvent.clientX - start.x, start.symbol, start.mins);
+      applyColumnWidths(withVisibleWidths(start.widths, visible, part));
+    };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      document.body.classList.remove('resizing-columns');
+      handle.classList.remove('dragging');
+      if (state.columnWidths !== start.widths) saveColumnWidths(state.columnWidths);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
   });
+  handle.addEventListener('dblclick', () => {
+    applyColumnWidths(DEFAULT_WIDTHS);
+    saveColumnWidths(DEFAULT_WIDTHS);
+  });
+  return handle;
+}
+
+let columnsButton = null;
+const columnsMenu = document.getElementById('columns-menu');
+
+// The header shows the shown columns and, at the end, the button that chooses them.
+// The labels are for the eye only: each row has its own label for screen readers.
+function renderColumnHeader() {
+  const symbol = el('span', { 'aria-hidden': 'true', dataset: { i18n: 'column.symbol' } }, t('column.symbol'));
+  const cells = state.columnSettings.visible.map((id, index) =>
+    el(
+      'span',
+      { class: 'cell', 'aria-hidden': 'true' },
+      el('span', { dataset: { i18n: COLUMN_LABELS[id] } }, t(COLUMN_LABELS[id])),
+      resizeHandle(index, symbol),
+    ),
+  );
+  document.querySelector('.columns').replaceChildren(symbol, ...cells, columnsButton);
+}
+
+// Saves of the columns from this panel that have not ended. During a save the storage only echoes
+// an earlier pick, so a quick second click is not undone for a moment.
+let columnSaves = 0;
+
+// Shows the new columns at once. A change made in this panel is saved; a change from another
+// computer comes from the storage and is only shown.
+function setColumnSettings(settings, { save = true } = {}) {
+  const turnedOn = settings.extendedHours && !state.columnSettings.extendedHours;
+  state.columnSettings = settings;
+  if (!settings.extendedHours) state.extended.clear();
+  applyColumnWidths(state.columnWidths);
+  renderColumnHeader();
+  render();
+  if (turnedOn) refresh();
+  if (!save) return;
+  columnSaves += 1;
+  saveColumnSettings(columnSettingsToSave(settings))
+    .catch((error) => {
+      state.alert = t('columns.failed', { message: error.message });
+      renderStatus();
+    })
+    .finally(() => {
+      columnSaves -= 1;
+      // A change from another computer during the save was skipped, so the storage is read again.
+      if (columnSaves === 0) {
+        loadColumnSettings().then((saved) => {
+          if (columnSaves === 0) showStoredColumns(saved);
+        });
+      }
+    });
+}
+
+// Shows the columns saved in the storage when they differ from the columns shown.
+function showStoredColumns(saved) {
+  const next = readColumnSettings(saved);
+  if (JSON.stringify(next) === JSON.stringify(state.columnSettings)) return;
+  setColumnSettings(next, { save: false });
+  if (columnsMenu.matches(':popover-open')) renderColumnsMenu();
+}
+
+// Each change shows at once. The menu stays open, so several columns can change in a row.
+function renderColumnsMenu() {
+  const { visible, extendedHours } = state.columnSettings;
+  const option = (label, checked, onChange) =>
+    el(
+      'label',
+      { class: 'menu-item menu-check' },
+      el('input', { type: 'checkbox', checked, onchange: (event) => onChange(event.target.checked) }),
+      label,
+    );
+  columnsMenu.replaceChildren(
+    el('p', { class: 'menu-title' }, t('columns.title')),
+    ...COLUMNS.map((id) =>
+      option(t(COLUMN_LABELS[id]), visible.includes(id), (checked) => {
+        const shown = state.columnSettings.visible;
+        const next = COLUMNS.filter((item) => (item === id ? checked : shown.includes(item)));
+        setColumnSettings({ ...state.columnSettings, visible: next });
+      }),
+    ),
+    menuSeparator(),
+    option(t('columns.extended'), extendedHours, (checked) => setColumnSettings({ ...state.columnSettings, extendedHours: checked })),
+    el('p', { class: 'menu-note' }, t('columns.extendedNote')),
+    menuSeparator(),
+    el(
+      'button',
+      {
+        type: 'button',
+        class: 'menu-item',
+        onclick: () => {
+          setColumnSettings(DEFAULT_COLUMNS);
+          renderColumnsMenu();
+          columnsMenu.querySelector('input').focus();
+        },
+      },
+      svgIcon('rotateCcw'),
+      t('columns.reset'),
+    ),
+  );
+}
+
+// The column menu opens under the column button at the end of the header.
+function setUpColumns(savedWidths, savedSettings) {
+  state.columnSettings = readColumnSettings(savedSettings);
+  applyColumnWidths(validWidths(savedWidths) ? savedWidths : DEFAULT_WIDTHS);
+  columnsButton = el(
+    'button',
+    {
+      type: 'button',
+      class: 'icon-button columns-button',
+      title: t('columns.button'),
+      'aria-label': t('columns.button'),
+      'aria-haspopup': 'dialog',
+      'aria-expanded': 'false',
+      dataset: { i18nLabel: 'columns.button', i18nTitle: 'columns.button' },
+    },
+    svgIcon('columns3'),
+  );
+  columnsButton.popoverTargetElement = columnsMenu;
+  columnsMenu.addEventListener('beforetoggle', (event) => {
+    if (event.newState !== 'open') return;
+    const box = columnsButton.getBoundingClientRect();
+    columnsMenu.style.top = `${box.bottom + 4}px`;
+    columnsMenu.style.right = `${document.documentElement.clientWidth - box.right}px`;
+    renderColumnsMenu();
+  });
+  columnsMenu.addEventListener('toggle', (event) => {
+    const open = event.newState === 'open';
+    columnsButton.setAttribute('aria-expanded', String(open));
+    if (open) columnsMenu.querySelector('input').focus();
+  });
+  renderColumnHeader();
 }
 
 // Saving closes the popup and fetches the quotes again with the new keys.
@@ -2466,6 +2679,7 @@ function watchStorage() {
     // An open sheet owns the colors, so an echo of its own earlier save does not undo a newer pick.
     if (changes[THEME_KEY] && !themeSheetOpen) applyTheme(changes[THEME_KEY].newValue ?? null);
     if (tabsChanged(changes)) syncTabs();
+    if (changes[COLUMNS_KEY] && columnSaves === 0) showStoredColumns(changes[COLUMNS_KEY].newValue);
     syncFromStorage();
   });
 }
@@ -2473,13 +2687,15 @@ function watchStorage() {
 async function start() {
   let tabs;
   let widths;
+  let columns;
   let saved;
-  [state.groups, state.keys, state.tab, tabs, widths, saved] = await Promise.all([
+  [state.groups, state.keys, state.tab, tabs, widths, columns, saved] = await Promise.all([
     loadGroups(),
     loadKeys(),
     loadCurrentTab(),
     loadTabs(),
     loadColumnWidths(),
+    loadColumnSettings(),
     chrome.storage.sync.get([THEME_KEY, LANGUAGE_KEY]),
   ]);
   applyTheme(saved[THEME_KEY] ?? null);
@@ -2489,7 +2705,7 @@ async function start() {
   chrome.runtime.sendMessage({ type: 'panelOpened' }).catch(() => {});
   document.getElementById('app-version').textContent = `v${chrome.runtime.getManifest().version}`;
   applyTabs(tabs);
-  setUpColumns(widths);
+  setUpColumns(widths, columns);
   setUpTopbar();
   renderTabs();
   setUpTransfer();
