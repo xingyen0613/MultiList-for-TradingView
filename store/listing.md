@@ -46,6 +46,8 @@ Rules for the descriptions (Chrome Web Store keyword spam policy and spam FAQ):
 • 用代碼或公司名稱搜尋，中文、英文都可以，例如「台積電」或「Apple」。
 • 一鍵匯入現有的觀察清單：每個清單變成一個分頁，每個區段變成一個分組。
 • 報價：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安、Bybit、OKX、Bitget、Gate、KuCoin、MEXC 加密貨幣的最新價、漲跌、漲跌幅。
+• 美股盤前、盤後：在這兩個時段，美股那一列下方多一行，顯示盤前或盤後的價格與漲跌。
+• 自選欄位：最新價、漲跌、漲跌幅可以各自顯示或隱藏，美股盤前盤後那一行也可以關掉。
 • 用分頁整理，拖曳就能調整順序。
 • 同步：在 Chrome 裡透過 Chrome 帳號同步；也可以用 Google 登入，在不同電腦、不同瀏覽器之間同步。
 • 匯出、匯入 JSON 檔，用來備份、搬到新電腦或分享給朋友。
@@ -79,6 +81,8 @@ Features
 • Search by ticker or company name, in English or Chinese.
 • Import your existing watchlists in one click: each list becomes a tab, and each section becomes a group.
 • Last price, change and change % for Taiwan, US, European and Korean stocks (KOSPI, KOSDAQ), and crypto on Binance, Bybit, OKX, Bitget, Gate, KuCoin and MEXC.
+• US pre-market and after-hours prices. During those sessions, a second line under each US stock shows the price and change.
+• Choose your columns. Show or hide last price, change and change %, and turn the pre-market and after-hours line on or off.
 • Organize groups in tabs, and drag to reorder.
 • Sync through your Chrome account in Chrome. Optional Google sign-in syncs across computers and browsers.
 • Export and import a JSON file to back up, move or share a list.
