@@ -1,28 +1,18 @@
 // Reads the answers of TradingView search and of the TradingView watchlists.
 
+import { t } from './i18n.js';
 import { marketOf } from './symbols.js';
 
 const stripTags = (text) => (text ?? '').replaceAll(/<\/?em>/g, '');
 
-const KIND_LABELS = {
-  stock: '股票',
-  fund: '基金',
-  dr: '存託憑證',
-  structured: '結構型商品',
-  futures: '期貨',
-  swap: '合約',
-  spot: '現貨',
-  index: '指數',
-  forex: '外匯',
-  bond: '債券',
-  economic: '經濟數據',
-};
+// The types that have a name in i18n.js. Other types show as TradingView sends them.
+const KINDS = ['stock', 'fund', 'dr', 'structured', 'futures', 'swap', 'spot', 'index', 'forex', 'bond', 'economic'];
 
 function kindOf(item) {
   const specs = item.typespecs ?? [];
   if (specs.includes('etf')) return 'ETF';
-  if (item.type === 'swap' && specs.includes('perpetual')) return '永續合約';
-  return KIND_LABELS[item.type] ?? item.type ?? '';
+  if (item.type === 'swap' && specs.includes('perpetual')) return t('kind.perpetual');
+  return KINDS.includes(item.type) ? t(`kind.${item.type}`) : (item.type ?? '');
 }
 
 // A futures result lists its contracts. The continuous contract, for example CME:SUI1!, follows

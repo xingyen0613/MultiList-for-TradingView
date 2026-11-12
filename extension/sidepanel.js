@@ -17,8 +17,9 @@ import {
 } from './lib/groups.js';
 import { diffGroups } from './lib/changes.js';
 import { isSignInAvailable, loadAccount, SignInCancelled, signIn, signOut } from './lib/account.js';
-import { PRIVACY_URL } from './lib/config.js';
-import { docFromItems, docsEqual, mergeDocs, normalizeDoc } from './lib/merge.js';
+import { PRIVACY_URLS } from './lib/config.js';
+import { getLanguage, LANGUAGE_KEY, LANGUAGE_NAMES, LANGUAGES, pickLanguage, setLanguage, t } from './lib/i18n.js';
+import { DEFAULT_TABS, docFromItems, docsEqual, mergeDocs, normalizeDoc } from './lib/merge.js';
 import { fetchQuotes, resolveSymbol } from './lib/quotes.js';
 import {
   loadColumnWidths,
@@ -40,27 +41,17 @@ import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js
 import { exportFileName, exportList, importList, parseExport, sizeError } from './lib/transfer.js';
 
 const REFRESH_MS = 30_000;
-const MARKET_LABELS = {
-  tw: '台股',
-  us: '美股',
-  eu: '歐股',
-  kr: '韓股',
-  crypto: '幣安現貨',
-  perp: '幣安合約',
-  ...Object.fromEntries(EXCHANGE_MARKETS.map((item) => [item.market, `${item.name} ${item.perp ? '合約' : '現貨'}`])),
-};
 const SEARCH_TYPES = [
-  ['', '全部'],
-  ['stocks', '股票'],
-  ['funds', '基金'],
-  ['crypto', '加密貨幣'],
-  ['futures', '期貨'],
-  ['index', '指數'],
+  ['', 'search.all'],
+  ['stocks', 'search.stocks'],
+  ['funds', 'search.funds'],
+  ['crypto', 'search.crypto'],
+  ['futures', 'search.futures'],
+  ['index', 'search.index'],
 ];
 const IMPORT_LIMIT = 4; // Name lookups at the same time during an import.
 const PING_MS = 15 * 60_000; // An open panel asks for the cloud copy this often.
 const FLUSH_WAIT_MS = 5000; // A sign-out waits at most this long for the last edit to go up.
-const ALL_LABEL = '全部';
 // PulsoIcon outline icons (ISC), drawn on a 24 x 24 grid.
 const ICONS = {
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
@@ -86,6 +77,7 @@ const ICONS = {
   triangleAlert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   handHeart: '<path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95"/><path d="m2 15 6 6"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  blank: '',
   moon: '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>',
 };
 
@@ -259,7 +251,7 @@ function persist() {
         await saveList();
         state.saveError = '';
       } catch (error) {
-        state.saveError = `儲存失敗：${error.message}`;
+        state.saveError = t('save.failed', { message: error.message });
         state.groups = await loadGroups();
         setBaseline(state.groups);
         render();
@@ -293,7 +285,7 @@ function groupById(groupId) {
 function groupTitle(group) {
   if (!group.loose) return group.name;
   const tab = group.tabId ? tabLabel(group.tabId) : '';
-  return tab ? `${tab} · 未分組` : '未分組';
+  return tab ? t('group.looseInTab', { tab }) : t('group.loose');
 }
 
 // Renames, drags and closing a group need no new quotes, and Fugle has a low limit.
@@ -317,9 +309,20 @@ function allTabIds() {
   return [ALL_TAB, ...state.customTabs.map((tab) => tab.id)];
 }
 
+// Binance and the stock markets have names in i18n.js. Another exchange shows its own name.
+function marketLabel(market) {
+  const exchange = EXCHANGE_MARKETS.find((item) => item.market === market);
+  if (exchange) return t(exchange.perp ? 'market.contract' : 'market.spot', { name: exchange.name });
+  return t(`market.${market}`);
+}
+
+// The tab of a new install keeps its stored default name, so two computers still agree on the list,
+// but it shows in the panel language until the user renames it.
 function tabLabel(tabId) {
-  if (tabId === ALL_TAB) return state.tabNames[ALL_TAB] || ALL_LABEL;
-  return state.customTabs.find((tab) => tab.id === tabId)?.name ?? '';
+  if (tabId === ALL_TAB) return state.tabNames[ALL_TAB] || t('tab.all');
+  const tab = state.customTabs.find((item) => item.id === tabId);
+  if (!tab) return '';
+  return tab.id === DEFAULT_TABS[0].id && tab.name === DEFAULT_TABS[0].name ? t('tab.default') : tab.name;
 }
 
 function clearTabEditing() {
@@ -354,7 +357,7 @@ function moveSymbolTo(drag, group, beforeSymbolId) {
   if (moveSymbol(state.groups, drag.groupId, drag.symbolId, group.id, beforeSymbolId)) {
     commit();
   } else {
-    state.notice = `${tickerOf(drag.symbolId)} 已經在「${groupTitle(group)}」`;
+    state.notice = t('symbol.exists', { ticker: tickerOf(drag.symbolId), group: groupTitle(group) });
     renderStatus();
   }
 }
@@ -466,9 +469,12 @@ function showDialog({ content, actions = [], onDismiss, className = '', split = 
   return dialog;
 }
 
-const privacyLink = () => el('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, '隱私權政策');
+const privacyUrl = () => PRIVACY_URLS[getLanguage()];
+const privacyLink = () => el('a', { href: privacyUrl(), target: '_blank', rel: 'noopener' }, t('privacy'));
 const dialogTitle = (text) => el('p', { class: 'dialog-title' }, text);
 const dialogNote = (...children) => el('p', { class: 'dialog-note' }, ...children);
+// A note that ends with the privacy link. English puts a space before the link, Chinese does not.
+const privacyNote = (text) => dialogNote(text, getLanguage() === 'en' ? ' ' : '', privacyLink());
 
 // An icon in a circle above the title. tone picks the colors of the circle.
 function heroHeader(icon, title, tone) {
@@ -481,8 +487,8 @@ function confirmDelete(message, onDelete) {
   showDialog({
     content: el('p', {}, message),
     actions: [
-      { label: '取消' },
-      { label: '刪除', className: 'danger', onClick: onDelete },
+      { label: t('cancel') },
+      { label: t('delete'), className: 'danger', onClick: onDelete },
     ],
   });
 }
@@ -496,13 +502,13 @@ function showConsentDialog() {
       className: 'hero-dialog',
       split: true,
       content: [
-        heroHeader('shield', '匿名分享觀察清單？', 'neutral'),
-        el('p', {}, 'MultiList 會匿名記錄你的觀察清單，不含任何能認出你的個人資訊。資料只用於 MultiList 的功能開發，例如熱門代碼統計。'),
-        dialogNote('之後可以在右上角「⋯」選單的「匿名分享」更改。', privacyLink()),
+        heroHeader('shield', t('consent.title'), 'neutral'),
+        el('p', {}, t('consent.body')),
+        privacyNote(t('consent.note')),
       ],
       actions: [
-        { label: '不同意', onClick: () => done(false) },
-        { label: '同意', onClick: () => done(true) },
+        { label: t('consent.no'), onClick: () => done(false) },
+        { label: t('consent.yes'), onClick: () => done(true) },
       ],
       onDismiss: () => done(null),
     });
@@ -515,10 +521,10 @@ function showPleaseDialog() {
   showDialog({
     className: 'hero-dialog please-dialog',
     split: true,
-    content: heroHeader('handHeart', '拜託啦～求求了～', 'pink'),
+    content: heroHeader('handHeart', t('please.title'), 'pink'),
     actions: [
-      { label: '太狠了', note: '還是不要' },
-      { label: '好辣', note: '同意分享', onClick: () => saveConsent(true) },
+      { label: t('please.no'), note: t('please.noNote') },
+      { label: t('please.yes'), note: t('please.yesNote'), onClick: () => saveConsent(true) },
     ],
   });
 }
@@ -528,7 +534,7 @@ function saveConsent(granted) {
   return setConsent(granted)
     .then(() => true)
     .catch((error) => {
-      state.alert = `分享設定儲存失敗：${error.message}`;
+      state.alert = t('share.failed', { message: error.message });
       renderStatus();
       return false;
     });
@@ -542,7 +548,7 @@ async function askForConsent() {
 }
 
 function confirmGroupDelete(group) {
-  confirmDelete(`刪除「${group.name}」？`, () =>
+  confirmDelete(t('group.deleteConfirm', { name: group.name }), () =>
     commit(() => {
       state.groups = state.groups.filter((item) => item.id !== group.id);
       clearEditing();
@@ -567,9 +573,9 @@ async function addSymbols(groupId, text) {
   const group = groupById(groupId);
   if (!group) return;
   for (const symbol of added) {
-    if (!addSymbol(group, symbol)) errors.push(`${tickerOf(symbol.id)} 已經在「${groupTitle(group)}」`);
+    if (!addSymbol(group, symbol)) errors.push(t('symbol.exists', { ticker: tickerOf(symbol.id), group: groupTitle(group) }));
   }
-  state.addError = errors.join('；');
+  state.addError = errors.join(t('error.separator'));
   resetSearch();
   commit();
 }
@@ -587,7 +593,7 @@ async function addSearchResult(groupId, result) {
   }
   const group = groupById(groupId);
   if (!group) return;
-  state.addError = addSymbol(group, symbol) ? '' : `${result.ticker} 已經在「${groupTitle(group)}」`;
+  state.addError = addSymbol(group, symbol) ? '' : t('symbol.exists', { ticker: result.ticker, group: groupTitle(group) });
   resetSearch();
   commit();
 }
@@ -627,6 +633,9 @@ function onSearchInput(text) {
   searchTimer = setTimeout(runSearch, 200);
 }
 
+// The page functions in chart-page.js send a timeout as 'timeout'.
+const pageError = (error) => (error === 'timeout' ? t('error.timeout') : error);
+
 // Only the answer to the last search is shown, because an older answer can come later.
 async function runSearch() {
   clearTimeout(searchTimer);
@@ -637,17 +646,17 @@ async function runSearch() {
     paintSearch();
     return;
   }
-  const answer = await runInTradingView(searchSymbolsInPage, [text, state.search.type]);
+  const answer = await runInTradingView(searchSymbolsInPage, [text, state.search.type, getLanguage() === 'en' ? 'en' : 'zh_TW']);
   if (run !== searchRun || state.addingTo === null || text !== state.search.text.trim()) return;
   let results = [];
   let message = '';
   if (!answer) {
-    message = '打開 TradingView 分頁後，就可以用代碼或名稱搜尋。現在可以輸入完整代碼（例如 BINANCE:SUIUSDT）再按 Enter。';
+    message = t('search.noTab');
   } else if (answer.error) {
-    message = `搜尋失敗（${answer.error}）`;
+    message = t('search.failed', { error: pageError(answer.error) });
   } else {
     results = parseSearch(answer.json);
-    if (results.length === 0) message = '找不到符合的標的';
+    if (results.length === 0) message = t('search.none');
   }
   Object.assign(state.search, { results, resultsFor: text, active: 0, message });
   paintSearch();
@@ -687,7 +696,7 @@ async function showOnChartTab(tab, symbolId) {
   const switched = Boolean(injection?.result);
   // A page that is still loading has no unsaved changes to lose.
   const warn = !switched && tab.status === 'complete';
-  state.alert = warn ? '無法在頁面內切換，已改用重新載入，未儲存的圖表變更可能遺失' : '';
+  state.alert = warn ? t('chart.reloaded') : '';
   renderStatus();
   if (!switched) await chrome.tabs.update(tab.id, { url: chartUrl(symbolId, tab.url) });
 }
@@ -848,7 +857,7 @@ function renderRow(group, symbol, symbolIndex) {
     el('span', { class: 'cell percent' }),
     iconButton(
       'close',
-      `從「${groupTitle(group)}」移除 ${ticker}`,
+      t('symbol.remove', { group: groupTitle(group), ticker }),
       () => commit(() => removeSymbol(group, symbol.id)),
       'row-remove',
     ),
@@ -862,8 +871,8 @@ function renderRow(group, symbol, symbolIndex) {
 function renderHeader(group, groupIndex) {
   if (state.renaming === group.id) {
     return textForm({
-      label: '分組名稱',
-      placeholder: '分組名稱',
+      label: t('group.name'),
+      placeholder: t('group.name'),
       value: group.name,
       onCancel: cancelEditing,
       onSubmit: (name) =>
@@ -896,9 +905,9 @@ function renderHeader(group, groupIndex) {
     el(
       'span',
       { class: 'group-actions' },
-      group.loose ? null : iconButton('edit', `重新命名「${group.name}」`, () => startEditing('renaming', group.id), 'secondary'),
-      group.loose ? null : iconButton('trash', `刪除「${group.name}」`, () => confirmGroupDelete(group), 'secondary'),
-      iconButton('plus', `新增代碼到「${groupTitle(group)}」`, () => toggleAdding(group)),
+      group.loose ? null : iconButton('edit', t('group.rename', { name: group.name }), () => startEditing('renaming', group.id), 'secondary'),
+      group.loose ? null : iconButton('trash', t('group.delete', { name: group.name }), () => confirmGroupDelete(group), 'secondary'),
+      iconButton('plus', t('symbol.addTo', { group: groupTitle(group) }), () => toggleAdding(group)),
     ),
   );
   if (!group.loose) makeDraggable(header, { kind: 'group', groupId: group.id });
@@ -910,7 +919,7 @@ function renderBody(group) {
   if (group.collapsed) return [];
   const nodes = group.symbols.map((symbol, index) => renderRow(group, symbol, index));
   if (group.symbols.length === 0 && state.addingTo !== group.id) {
-    nodes.push(el('p', { class: 'group-empty' }, '這個分組還沒有代碼。按 + 新增。'));
+    nodes.push(el('p', { class: 'group-empty' }, t('group.empty')));
   }
   if (state.addingTo === group.id) {
     nodes.push(searchForm(group));
@@ -937,14 +946,14 @@ function searchPanel() {
       el(
         'span',
         { class: 'result-meta' },
-        result.quoted ? null : el('span', { class: 'no-quote' }, '無報價'),
+        result.quoted ? null : el('span', { class: 'no-quote' }, t('search.noQuote')),
         `${result.exchange} · ${result.kind}`,
       ),
       el('span', { class: 'result-name', title: result.name }, result.name),
     ),
   );
   return [
-    items.length > 0 ? el('ul', { class: 'search-results', role: 'listbox', id: 'search-results', 'aria-label': '搜尋結果' }, ...items) : null,
+    items.length > 0 ? el('ul', { class: 'search-results', role: 'listbox', id: 'search-results', 'aria-label': t('search.results') }, ...items) : null,
     message ? el('p', { class: 'search-message', role: 'status' }, message) : null,
   ];
 }
@@ -952,9 +961,9 @@ function searchPanel() {
 function searchForm(group) {
   const input = el('input', {
     type: 'text',
-    placeholder: '代碼或名稱，例如 2330、台積電、AAPL、BTC',
+    placeholder: t('search.placeholder'),
     value: state.search.text,
-    'aria-label': `新增代碼到「${groupTitle(group)}」`,
+    'aria-label': t('symbol.addTo', { group: groupTitle(group) }),
     role: 'combobox',
     'aria-autocomplete': 'list',
     'aria-controls': 'search-results',
@@ -968,7 +977,7 @@ function searchForm(group) {
     oncompositionend: () => onSearchInput(input.value),
     onkeydown: (event) => onSearchKey(event, group),
   });
-  const types = SEARCH_TYPES.map(([type, label]) =>
+  const types = SEARCH_TYPES.map(([type, key]) =>
     el(
       'button',
       {
@@ -983,14 +992,14 @@ function searchForm(group) {
           runSearch();
         },
       },
-      label,
+      t(key),
     ),
   );
   return el(
     'form',
     { class: 'inline-form symbol-search', onsubmit: (event) => event.preventDefault() },
     input,
-    el('div', { class: 'search-types', role: 'group', 'aria-label': '搜尋類型' }, ...types),
+    el('div', { class: 'search-types', role: 'group', 'aria-label': t('search.types') }, ...types),
     el('div', { class: 'search-panel' }, ...searchPanel()),
   );
 }
@@ -1033,12 +1042,12 @@ async function startImport() {
 function showNoTradingViewDialog() {
   showDialog({
     content: [
-      dialogTitle('找不到 TradingView 分頁'),
-      el('p', {}, '一鍵匯入會從你已登入的 TradingView 分頁讀取清單。'),
-      dialogNote('打開 TradingView 並登入後，再按一次匯入。'),
+      dialogTitle(t('noTv.title')),
+      el('p', {}, t('noTv.body')),
+      dialogNote(t('noTv.note')),
     ],
     actions: [
-      { label: '取消' },
+      { label: t('cancel') },
       { label: 'TradingView', icon: 'externalLink', className: 'primary', onClick: () => chrome.tabs.create({ url: TRADINGVIEW_URL }) },
     ],
   });
@@ -1046,11 +1055,11 @@ function showNoTradingViewDialog() {
 
 function importChoice(answer) {
   const error = (message) => ({ step: 'error', message });
-  if (answer.error) return error(`讀取 TradingView 名單失敗（${answer.error}）`);
-  if (!Array.isArray(answer.lists)) return error('看不懂 TradingView 回傳的名單，TradingView 可能已經改版。');
-  if (isSignedOut(answer.lists)) return error('TradingView 分頁沒有登入。請先登入 TradingView，再按一次匯入。');
+  if (answer.error) return error(t('import.readFailed', { error: pageError(answer.error) }));
+  if (!Array.isArray(answer.lists)) return error(t('import.unknown'));
+  if (isSignedOut(answer.lists)) return error(t('import.signedOut'));
   const lists = watchlistsToTabs(answer.lists).filter((list) => list.count > 0);
-  if (lists.length === 0) return error('你的 TradingView 名單都是空的。');
+  if (lists.length === 0) return error(t('import.empty'));
   return { step: 'choose', lists, chosen: new Set(lists.map((_, index) => index)) };
 }
 
@@ -1089,16 +1098,16 @@ function buildImport(picked, symbolOf) {
   return { tabs, groups, usage };
 }
 
-const TRADINGVIEW_ADVICE = { group: '請在 TradingView 把這個區段拆小，或不要勾選這個清單。', total: '請少選幾個清單。' };
-const FILE_ADVICE = { group: '請先把這個分組拆小再匯出。', total: '請先刪掉一些分組或代碼，或改匯入較小的檔案。' };
+const TRADINGVIEW_ADVICE = { group: 'advice.tvGroup', total: 'advice.tvTotal' };
+const FILE_ADVICE = { group: 'advice.fileGroup', total: 'advice.fileTotal' };
 
 // advice says what to do about one group that is too large, and about a list that is too large.
 function quotaMessage(usage, advice = TRADINGVIEW_ADVICE) {
   if (usage.tooLarge) {
-    return `「${groupTitle(usage.tooLarge)}」有 ${usage.tooLarge.symbols.length} 個代碼，超過 Chrome 同步的單一分組上限（8 KB）。${advice.group}`;
+    return t('quota.group', { group: groupTitle(usage.tooLarge), count: usage.tooLarge.symbols.length }) + t(advice.group);
   }
-  if (usage.tooMany) return `匯入後會有 ${usage.items} 個同步項目，超過 Chrome 上限 512 個。${advice.total}`;
-  return `匯入後會用掉 ${Math.ceil(usage.total / 1024)} KB，超過 Chrome 同步上限 100 KB。${advice.total}`;
+  if (usage.tooMany) return t('quota.items', { items: usage.items }) + t(advice.total);
+  return t('quota.bytes', { kb: Math.ceil(usage.total / 1024) }) + t(advice.total);
 }
 
 async function runImport() {
@@ -1140,18 +1149,18 @@ async function runImport() {
   persistTabs();
   persist();
   selectTab(tabs[0].id);
-  state.notice = `已匯入 ${tabs.length} 個分頁、${groups.length} 個分組、${ids.length} 個代碼`;
+  state.notice = t('import.done', { tabs: tabs.length, groups: groups.length, symbols: ids.length });
   renderStatus();
 }
 
-const importProgressText = () => `正在查詢名稱 ${state.importing.done} / ${state.importing.total}…`;
+const importProgressText = () => t('import.progress', { done: state.importing.done, total: state.importing.total });
 
 function importPanel() {
   const { step } = state.importing;
-  const title = el('p', { class: 'import-title' }, '從 TradingView 匯入名單');
+  const title = el('p', { class: 'import-title' }, t('import.title'));
   const closeButton = (label) => el('button', { type: 'button', class: 'text-button', onclick: closeImport }, label);
   if (step === 'loading') {
-    return el('section', { class: 'import-panel' }, title, el('p', { class: 'hint' }, '正在讀取 TradingView 名單…'), el('div', { class: 'form-actions' }, closeButton('取消')));
+    return el('section', { class: 'import-panel' }, title, el('p', { class: 'hint' }, t('import.loading')), el('div', { class: 'form-actions' }, closeButton(t('cancel'))));
   }
   if (step === 'working') {
     return el('section', { class: 'import-panel' }, title, el('p', { class: 'hint import-progress', role: 'status' }, importProgressText()));
@@ -1162,7 +1171,7 @@ function importPanel() {
       { class: 'import-panel' },
       title,
       el('p', { class: 'form-error import-error', role: 'alert' }, state.importing.message),
-      el('div', { class: 'form-actions' }, closeButton('關閉')),
+      el('div', { class: 'form-actions' }, closeButton(t('close'))),
     );
   }
   const { lists, chosen } = state.importing;
@@ -1180,20 +1189,20 @@ function importPanel() {
         },
       }),
       el('span', { class: 'import-name' }, list.name),
-      el('span', { class: 'hint' }, `${list.count} 檔 · ${list.groups.length} 組`),
+      el('span', { class: 'hint' }, t('import.listInfo', { count: list.count, groups: list.groups.length })),
     ),
   );
   return el(
     'section',
     { class: 'import-panel' },
     title,
-    el('p', { class: 'hint' }, '每個清單會變成一個分頁，清單裡的區段會變成分組。'),
+    el('p', { class: 'hint' }, t('import.hint')),
     ...items,
     el(
       'div',
       { class: 'form-actions' },
-      el('button', { type: 'button', class: 'text-button primary import-start', disabled: chosen.size === 0, onclick: runImport }, '匯入'),
-      closeButton('取消'),
+      el('button', { type: 'button', class: 'text-button primary import-start', disabled: chosen.size === 0, onclick: runImport }, t('import')),
+      closeButton(t('cancel')),
     ),
   );
 }
@@ -1209,8 +1218,8 @@ function render() {
         'div',
         { class: 'add-group-form' },
         textForm({
-          label: '新分組名稱',
-          placeholder: '新分組名稱，按 Enter 建立',
+          label: t('group.newName'),
+          placeholder: t('group.newPlaceholder'),
           onCancel: cancelEditing,
           onSubmit: (name) =>
             commit(() => {
@@ -1227,7 +1236,7 @@ function render() {
     const actions = el(
       'div',
       { class: 'list-actions' },
-      el('button', { type: 'button', class: 'list-action add-group', onclick: () => startEditing('creating', true) }, svgIcon('plus'), '新增分組'),
+      el('button', { type: 'button', class: 'list-action add-group', onclick: () => startEditing('creating', true) }, svgIcon('plus'), t('group.add')),
       el(
         'button',
         {
@@ -1237,7 +1246,7 @@ function render() {
           onclick: toggleAddingLoose,
         },
         svgIcon('plus'),
-        '新增代碼',
+        t('symbol.add'),
       ),
     );
     makeLooseDropTarget(actions);
@@ -1290,23 +1299,23 @@ function emptyState() {
     return el(
       'div',
       { class: 'empty-state' },
-      el('p', { class: 'empty-title' }, `「${tabLabel(state.tab)}」還沒有代碼`),
-      el('p', { class: 'empty-text' }, '按上方的「新增代碼」加入標的，或把其他分頁的分組標題拖到這個分頁上。'),
+      el('p', { class: 'empty-title' }, t('empty.tabTitle', { tab: tabLabel(state.tab) })),
+      el('p', { class: 'empty-text' }, t('empty.tabText')),
     );
   }
   return el(
     'div',
     { class: 'empty-state' },
     el('span', { class: 'hero-icon neutral large' }, svgIcon('listPlus')),
-    el('p', { class: 'empty-title' }, '清單還是空的'),
-    el('p', { class: 'empty-text' }, '從 TradingView 帶入你現有的清單，', el('br'), '或自己加入第一個代碼。'),
+    el('p', { class: 'empty-title' }, t('empty.title')),
+    el('p', { class: 'empty-text' }, t('empty.textImport'), el('br'), t('empty.textAdd')),
     el(
       'div',
       { class: 'empty-actions' },
-      el('button', { type: 'button', class: 'big-button primary', onclick: startImport }, svgIcon('fileInput'), '一鍵匯入 TradingView 清單'),
-      el('button', { type: 'button', class: 'big-button', onclick: toggleAddingLoose }, svgIcon('plus'), '手動新增第一個代碼'),
+      el('button', { type: 'button', class: 'big-button primary', onclick: startImport }, svgIcon('fileInput'), t('empty.import')),
+      el('button', { type: 'button', class: 'big-button', onclick: toggleAddingLoose }, svgIcon('plus'), t('empty.add')),
     ),
-    el('p', { class: 'empty-hint' }, '匯入需要先打開並登入 TradingView'),
+    el('p', { class: 'empty-hint' }, t('empty.hint')),
   );
 }
 
@@ -1318,16 +1327,16 @@ function messageBlock(kind, icon, lines, onClose) {
     { class: `message ${kind}`, role: kind === 'problem' ? 'alert' : 'status' },
     svgIcon(icon),
     el('div', { class: 'message-lines' }, ...lines.map((line) => el('p', {}, line))),
-    onClose ? iconButton('close', '關閉訊息', onClose, 'message-close') : null,
+    onClose ? iconButton('close', t('message.close'), onClose, 'message-close') : null,
   );
 }
 
 function renderStatus() {
   const sourceErrors = state.sourceStatus
     .filter((item) => item.errors.length > 0)
-    .map((item) => `${MARKET_LABELS[item.market]}：${item.errors.join('、')}`);
+    .map((item) => t('source.error', { market: marketLabel(item.market), errors: item.errors.join(t('list.separator')) }));
   const syncFailed = state.account && state.syncStatus?.state === 'error';
-  const problems = [state.alert, state.saveError, ...sourceErrors, syncFailed ? SYNC_TEXT.error : ''].filter(Boolean);
+  const problems = [state.alert, state.saveError, ...sourceErrors, syncFailed ? t('sync.error') : ''].filter(Boolean);
   const clearProblems = () => {
     state.alert = '';
     state.saveError = '';
@@ -1348,18 +1357,19 @@ function renderStatus() {
 
   // The update time shows when there are quotes. Its tip lists the sources and the cloud sync.
   document.getElementById('update-info').hidden = !state.updatedAt;
-  document.getElementById('update-time').textContent = state.updatedAt ? `更新於 ${formatTime(state.updatedAt)}` : '';
+  document.getElementById('update-time').textContent = state.updatedAt ? t('status.updated', { time: formatTime(state.updatedAt) }) : '';
   const sources = state.sourceStatus.filter((item) => item.source);
-  const syncText = state.account ? SYNC_TEXT[state.syncStatus?.state] : '';
+  const syncKey = SYNC_KEYS[state.syncStatus?.state];
+  const syncText = state.account && syncKey ? t(syncKey) : '';
   const rows = (items) => el('dl', { class: 'tip-rows' }, ...items.flatMap(([label, value, className]) => [el('dt', {}, label), el('dd', { class: className ?? '' }, value)]));
   document
     .getElementById('source-tip')
     .replaceChildren(
       ...[
-        el('p', { class: 'tip-title' }, '資料來源'),
-        sources.length > 0 ? rows(sources.map((item) => [MARKET_LABELS[item.market], item.source])) : el('p', { class: 'tip-note' }, '還沒有報價'),
+        el('p', { class: 'tip-title' }, t('source.title')),
+        sources.length > 0 ? rows(sources.map((item) => [marketLabel(item.market), item.source])) : el('p', { class: 'tip-note' }, t('source.none')),
         syncText ? el('div', { class: 'tip-separator' }) : null,
-        syncText ? rows([['雲端同步', syncText, `sync-${state.syncStatus.state}`]]) : null,
+        syncText ? rows([[t('sync.label'), syncText, `sync-${state.syncStatus.state}`]]) : null,
       ].filter(Boolean),
     );
 }
@@ -1417,11 +1427,11 @@ function setUpTopbar() {
   menu.addEventListener('toggle', (event) => {
     const open = event.newState === 'open';
     menuButton.setAttribute('aria-expanded', String(open));
-    if (open) menu.querySelector('[role="menuitem"]')?.focus();
+    if (open) menu.querySelector('[role^="menuitem"]')?.focus();
   });
   // The arrow keys move between the items. Home and End go to the first and the last item.
   menu.addEventListener('keydown', (event) => {
-    const items = [...menu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+    const items = [...menu.querySelectorAll('[role^="menuitem"]:not(:disabled)')];
     const index = items.indexOf(document.activeElement);
     const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1 }[event.key];
     if (next === undefined) return;
@@ -1456,43 +1466,58 @@ function menuHeader() {
     return el(
       'div',
       { class: 'menu-header', role: 'presentation' },
-      el('p', { class: 'menu-header-note' }, '已登入，清單會自動同步'),
+      el('p', { class: 'menu-header-note' }, t('menu.signedIn')),
       el('p', { class: 'menu-header-email' }, state.account.email),
     );
   }
-  if (state.signInExpired) return el('div', { class: 'menu-header', role: 'presentation' }, el('p', { class: 'menu-header-note expired' }, '登入已過期，請重新登入'));
+  if (state.signInExpired) return el('div', { class: 'menu-header', role: 'presentation' }, el('p', { class: 'menu-header-note expired' }, t('menu.expired')));
   return null;
 }
 
 function accountItems() {
   if (!isSignInAvailable()) return [];
-  if (!state.account) return [menuSeparator(), menuItem('logIn', '用 Google 登入', () => showSignInDialog())];
-  const remove = menuItem('userX', '刪除帳號…', showDeleteAccountDialog, 'danger');
+  if (!state.account) return [menuSeparator(), menuItem('logIn', t('menu.signIn'), () => showSignInDialog())];
+  const remove = menuItem('userX', t('menu.deleteAccount'), showDeleteAccountDialog, 'danger');
   remove.disabled = state.deleting;
-  return [menuSeparator(), menuItem('logOut', '登出', startSignOut), remove];
+  return [menuSeparator(), menuItem('logOut', t('menu.signOut'), startSignOut), remove];
+}
+
+// The two languages are radio items. Each one is named in its own language.
+function languageItems() {
+  const items = LANGUAGES.map((language) => {
+    const chosen = language === getLanguage();
+    const item = menuItem(chosen ? 'check' : 'blank', LANGUAGE_NAMES[language], () => chooseLanguage(language));
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', String(chosen));
+    item.lang = language === 'en' ? 'en' : 'zh-Hant';
+    return item;
+  });
+  const label = el('div', { class: 'menu-header', role: 'presentation' }, el('p', { class: 'menu-header-note' }, t('menu.language')));
+  return [menuSeparator(), label, ...items];
 }
 
 // An account change can redraw the open menu. The focus stays on the same item.
 function renderMenu() {
   const menu = document.getElementById('menu');
-  const focused = [...menu.querySelectorAll('[role="menuitem"]')].indexOf(document.activeElement);
+  const focused = [...menu.querySelectorAll('[role^="menuitem"]')].indexOf(document.activeElement);
   const header = menuHeader();
   menu
     .replaceChildren(
       ...(header ? [header, menuSeparator()] : []),
-      menuItem('fileInput', '從 TradingView 一鍵匯入', startImport),
-      menuItem('upload', '從檔案匯入…', showImportFileDialog),
-      menuItem('download', '匯出檔案…', showExportDialog),
+      menuItem('fileInput', t('menu.importTv'), startImport),
+      menuItem('upload', t('menu.importFile'), showImportFileDialog),
+      menuItem('download', t('menu.export'), showExportDialog),
       menuSeparator(),
-      menuItem('keyRound', '報價 API key…', showKeysDialog),
-      menuItem('palette', '背景與文字顏色…', showThemeSheet),
-      menuItem('shield', '匿名分享…', showShareDialog),
+      menuItem('keyRound', t('menu.keys'), showKeysDialog),
+      menuItem('palette', t('menu.colors'), showThemeSheet),
+      menuItem('shield', t('menu.share'), showShareDialog),
+      ...languageItems(),
       ...accountItems(),
     );
-  if (focused !== -1) menu.querySelectorAll('[role="menuitem"]')[focused]?.focus();
+  if (focused !== -1) menu.querySelectorAll('[role^="menuitem"]')[focused]?.focus();
 }
 
-const SYNC_TEXT = { ok: '已同步', error: '同步失敗，稍後重試' };
+const SYNC_KEYS = { ok: 'sync.ok', error: 'sync.error' };
 
 // Only a click on the Google button starts the flow. Resolves when the popup is closed and any
 // sign-in it started has ended, so the next first-run question waits for it.
@@ -1511,16 +1536,16 @@ function showSignInDialog() {
           dialog.close();
         },
       },
-      '使用 Google 帳戶登入',
+      t('signIn.google'),
     );
     google.insertAdjacentHTML('afterbegin', GOOGLE_LOGO);
     const dialog = showDialog({
       className: 'hero-dialog',
       content: [
-        iconButton('close', '關閉，不登入', () => dialog.close(), 'dialog-close'),
-        heroHeader('cloud', '同步你的觀察清單', 'accent'),
+        iconButton('close', t('signIn.close'), () => dialog.close(), 'dialog-close'),
+        heroHeader('cloud', t('signIn.title'), 'accent'),
         google,
-        el('p', { class: 'dialog-note center' }, '登入後可在其他設備或瀏覽器共享觀察清單。'),
+        el('p', { class: 'dialog-note center' }, t('signIn.note')),
         el('p', { class: 'dialog-link' }, privacyLink()),
       ],
     });
@@ -1536,7 +1561,7 @@ async function startSignIn() {
   } catch (error) {
     if (!(error instanceof SignInCancelled)) {
       console.warn(error);
-      state.alert = '登入失敗，請再試一次';
+      state.alert = t('signIn.failed');
     }
   } finally {
     state.signingIn = false;
@@ -1552,8 +1577,8 @@ function renderAccount() {
   document
     .getElementById('signin-tip')
     .replaceChildren(
-      el('p', {}, expired ? '登入已過期，你的清單暫時不會同步到其他設備或瀏覽器' : '登入後你將不會在其他設備或瀏覽器遺失你的觀察清單'),
-      el('p', { class: 'tip-note' }, expired ? '點一下雲朵就能重新登入' : '點一下雲朵就能登入'),
+      el('p', {}, t(expired ? 'signInTip.expired' : 'signInTip.offer')),
+      el('p', { class: 'tip-note' }, t(expired ? 'signInTip.expiredNote' : 'signInTip.offerNote')),
     );
   renderMenu();
 }
@@ -1565,17 +1590,17 @@ async function startSignOut() {
   await signOut();
 }
 
-const DELETE_ERRORS = { expired: '登入已過期，請重新登入後再刪除', failed: '刪除失敗，請稍後再試' };
+const DELETE_ERRORS = { expired: 'deleteAccount.expired', failed: 'deleteAccount.failed' };
 
 // The focus starts on 取消, so a quick Enter does not delete.
 function showDeleteAccountDialog() {
   if (state.deleting) return;
   showDialog({
     content: [
-      el('p', { class: 'dialog-title' }, '刪除帳號？'),
-      el('p', {}, '雲端上的清單和帳號資料會永久刪除，無法復原。這台電腦上的清單會保留。其他已登入的瀏覽器會被登出。'),
+      el('p', { class: 'dialog-title' }, t('deleteAccount.title')),
+      el('p', {}, t('deleteAccount.body')),
     ],
-    actions: [{ label: '取消' }, { label: '刪除帳號', className: 'danger', onClick: startDeleteAccount }],
+    actions: [{ label: t('cancel') }, { label: t('deleteAccount.confirm'), className: 'danger', onClick: startDeleteAccount }],
   });
 }
 
@@ -1587,7 +1612,7 @@ async function startDeleteAccount() {
   renderAccount();
   try {
     const answer = await chrome.runtime.sendMessage({ type: 'deleteAccount' }).catch(() => null);
-    if (!answer?.ok) state.alert = DELETE_ERRORS[answer?.reason] ?? DELETE_ERRORS.failed;
+    if (!answer?.ok) state.alert = t(DELETE_ERRORS[answer?.reason] ?? DELETE_ERRORS.failed);
   } finally {
     state.deleting = false;
     renderAccount();
@@ -1599,7 +1624,7 @@ let choiceDialog = null;
 let choiceShown = '';
 let choiceDismissed = false;
 
-const countText = ({ groups, symbols }) => `${groups} 個分組、${symbols} 個代碼`;
+const countText = ({ groups, symbols }) => t('choice.count', { groups, symbols });
 
 // The background found two different lists with nothing to merge from, and waits for the user.
 // Escape or a click outside only closes the popup, so the question comes back next time.
@@ -1614,24 +1639,24 @@ function updateChoiceDialog() {
   choiceShown = '';
   if (!choice || choiceDismissed) return;
 
-  const updated = choice.cloudUpdatedAt ? `（更新於 ${formatDateTime(new Date(choice.cloudUpdatedAt))}）` : '';
+  const updated = choice.cloudUpdatedAt ? t('choice.updated', { time: formatDateTime(new Date(choice.cloudUpdatedAt)) }) : '';
   // The focus starts on the export, so a quick Enter replaces neither list.
   const exportButton = el(
     'button',
     { type: 'button', class: 'text-button', autofocus: true, onclick: () => downloadExport(ALL_TAB) },
-    '先匯出這台的清單',
+    t('choice.export'),
   );
   const dialog = showDialog({
     content: [
-      el('p', { class: 'dialog-title' }, '這台和雲端的清單不同'),
-      el('p', {}, `這台：${countText(choice.local)}`),
-      el('p', {}, `雲端：${countText(choice.cloud)}${updated}`),
-      el('p', {}, '選一份保留，另一份會被取代。用雲端覆蓋這台時，同一個 Chrome 帳號的其他電腦也會跟著改變。'),
+      el('p', { class: 'dialog-title' }, t('choice.title')),
+      el('p', {}, t('choice.local', { count: countText(choice.local) })),
+      el('p', {}, t('choice.cloud', { count: countText(choice.cloud), updated })),
+      el('p', {}, t('choice.body')),
       el('p', {}, exportButton),
     ],
     actions: [
-      { label: '用雲端覆蓋這台', onClick: () => sendChoice('cloud') },
-      { label: '用這台覆蓋雲端', onClick: () => sendChoice('local') },
+      { label: t('choice.useCloud'), onClick: () => sendChoice('cloud') },
+      { label: t('choice.useLocal'), onClick: () => sendChoice('local') },
     ],
     onDismiss: () => {
       choiceDismissed = true;
@@ -1682,7 +1707,7 @@ function persistTabs() {
   saveQueue = saveQueue
     .then(saveList)
     .catch((error) => {
-      state.saveError = `儲存失敗：${error.message}`;
+      state.saveError = t('save.failed', { message: error.message });
       renderStatus();
     })
     .finally(() => {
@@ -1717,13 +1742,14 @@ function stopTabEditing() {
 }
 
 // An empty name, or the default name, goes back to the default name of the all tab.
-// A custom tab keeps its old name if the new name is empty.
+// A custom tab keeps its old name if the new name is empty or the same as the shown name, so the
+// default name of a new install is not saved in one language.
 function renameTab(tabId, name) {
   state.editingTab = null;
   if (tabId === ALL_TAB) {
-    if (name && name !== ALL_LABEL) state.tabNames[ALL_TAB] = name;
+    if (name && name !== t('tab.all')) state.tabNames[ALL_TAB] = name;
     else delete state.tabNames[ALL_TAB];
-  } else if (name) {
+  } else if (name && name !== tabLabel(tabId)) {
     const tab = state.customTabs.find((item) => item.id === tabId);
     if (tab) tab.name = name;
   }
@@ -1767,16 +1793,14 @@ function tabNameField({ value, placeholder, label, onSubmit, onCancel }) {
       }
     },
   });
-  return [input, iconButton('check', '儲存名稱', () => onSubmit(input.value.trim()), 'tab-save')];
+  return [input, iconButton('check', t('tab.saveName'), () => onSubmit(input.value.trim()), 'tab-save')];
 }
 
 function tabEditor(tabId) {
   const parts = tabNameField({
     value: tabLabel(tabId),
-    placeholder: tabId === ALL_TAB ? ALL_LABEL : '分頁名稱',
-    label: tabId === ALL_TAB
-      ? `「${tabLabel(tabId)}」分頁名稱，清空可還原預設`
-      : `「${tabLabel(tabId)}」分頁名稱`,
+    placeholder: tabId === ALL_TAB ? t('tab.all') : t('tab.name'),
+    label: t(tabId === ALL_TAB ? 'tab.nameAllLabel' : 'tab.nameLabel', { tab: tabLabel(tabId) }),
     onSubmit: (name) => renameTab(tabId, name),
     onCancel: stopTabEditing,
   });
@@ -1786,9 +1810,9 @@ function tabEditor(tabId) {
 function confirmTabDelete(tabId) {
   const count = state.groups.filter((group) => group.tabId === tabId && !group.loose).length;
   const loose = looseGroup(state.groups, tabId)?.symbols.length ?? 0;
-  const parts = [count > 0 ? `${count} 個分組` : '', loose > 0 ? `${loose} 個未分組代碼` : ''].filter(Boolean);
-  const keep = parts.length > 0 ? `裡面的 ${parts.join('、')}會留在「${tabLabel(ALL_TAB)}」。` : '';
-  confirmDelete(`刪除「${tabLabel(tabId)}」分頁？${keep}`, () => deleteTab(tabId));
+  const parts = [count > 0 ? t('tab.groups', { count }) : '', loose > 0 ? t('tab.loose', { count: loose }) : ''].filter(Boolean);
+  const keep = parts.length > 0 ? t('tab.keep', { parts: parts.join(t('list.and')), all: tabLabel(ALL_TAB) }) : '';
+  confirmDelete(t('tab.deleteConfirm', { tab: tabLabel(tabId), keep }), () => deleteTab(tabId));
 }
 
 // Drop a group header on a tab to move the group there.
@@ -1807,8 +1831,8 @@ function makeTabDropTarget(button, tabId) {
     const from = group.tabId;
     commit(() => moveGroupToTab(group, tabId));
     state.notice = target
-      ? `「${group.name}」已移到「${tabLabel(tabId)}」`
-      : `「${group.name}」已移出「${tabLabel(from) || '自訂分頁'}」`;
+      ? t('tab.movedTo', { group: group.name, tab: tabLabel(tabId) })
+      : t('tab.movedOut', { group: group.name, tab: tabLabel(from) || t('tab.custom') });
     renderStatus();
   });
 }
@@ -1830,7 +1854,7 @@ function tabButton(tabId) {
       },
       tabLabel(tabId),
     ),
-    tabId === ALL_TAB ? null : iconButton('close', `刪除「${tabLabel(tabId)}」分頁`, () => confirmTabDelete(tabId), 'tab-close'),
+    tabId === ALL_TAB ? null : iconButton('close', t('tab.delete', { tab: tabLabel(tabId) }), () => confirmTabDelete(tabId), 'tab-close'),
   );
   makeTabDropTarget(item, tabId);
   return item;
@@ -1843,7 +1867,7 @@ function tabActions() {
     { class: 'tab-actions' },
     iconButton(
       'edit',
-      `重新命名「${tabLabel(state.tab)}」分頁`,
+      t('tab.rename', { tab: tabLabel(state.tab) }),
       () => {
         clearTabEditing();
         state.editingTab = state.tab;
@@ -1853,7 +1877,7 @@ function tabActions() {
     ),
     iconButton(
       'plus',
-      '新增分頁',
+      t('tab.add'),
       () => {
         clearTabEditing();
         state.creatingTab = true;
@@ -1874,8 +1898,8 @@ function renderTabs() {
         { class: 'tab-current' },
         ...tabNameField({
           value: '',
-          placeholder: '新分頁名稱',
-          label: '新分頁名稱',
+          placeholder: t('tab.newName'),
+          label: t('tab.newName'),
           onSubmit: (name) => (name ? createTab(name) : stopTabEditing()),
           onCancel: stopTabEditing,
         }),
@@ -1923,7 +1947,7 @@ function setUpColumns(saved) {
   const header = document.querySelector('.columns');
   const symbolHeader = header.firstElementChild;
   header.querySelectorAll('.cell').forEach((cell, index) => {
-    const handle = el('span', { class: 'col-resize', title: '拖曳調整欄寬，按兩下還原預設' });
+    const handle = el('span', { class: 'col-resize', title: t('column.resize'), dataset: { i18nTitle: 'column.resize' } });
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
@@ -1966,20 +1990,20 @@ function showKeysDialog() {
     state.keys = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value.trim()]));
     saveKeys(state.keys)
       .then(() => {
-        state.notice = '已儲存 API key';
+        state.notice = t('keys.saved');
         renderStatus();
         refresh();
       })
       .catch((error) => {
-        state.alert = `API key 儲存失敗：${error.message}`;
+        state.alert = t('keys.failed', { message: error.message });
         renderStatus();
       });
   };
   const labelled = (text, input) => el('label', { class: 'field' }, text, input);
   const dialog = showDialog({
     content: [
-      dialogTitle('報價 API key'),
-      dialogNote('沒有 key 時，台股用 TWSE MIS，美股用 Yahoo。Key 只存在這台電腦，不會同步。'),
+      dialogTitle(t('keys.title')),
+      dialogNote(t('keys.note')),
       el(
         'div',
         {
@@ -1997,7 +2021,7 @@ function showKeysDialog() {
         labelled('Alpaca Secret', fields.alpacaSecret),
       ),
     ],
-    actions: [{ label: '取消' }, { label: '儲存', className: 'primary', onClick: save }],
+    actions: [{ label: t('cancel') }, { label: t('save'), className: 'primary', onClick: save }],
   });
 }
 
@@ -2005,7 +2029,9 @@ function showKeysDialog() {
 // Returns the file name.
 function downloadExport(tabId = ALL_TAB) {
   const name = exportFileName();
-  const data = exportList(state.groups, state.customTabs, tabId);
+  // The default tab name goes out as it shows, so the file does not keep the other language.
+  const custom = state.customTabs.map((tab) => ({ ...tab, name: tabLabel(tab.id) }));
+  const data = exportList(state.groups, custom, tabId);
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const link = el('a', { href: url, download: name, hidden: true });
   document.body.append(link);
@@ -2029,28 +2055,28 @@ function showExportDialog() {
   const onAll = state.tab === ALL_TAB;
   showDialog({
     content: [
-      dialogTitle('匯出觀察清單'),
+      dialogTitle(t('export.title')),
       el(
         'div',
-        { class: 'options', role: 'radiogroup', 'aria-label': '匯出範圍' },
-        option(ALL_TAB, '整份清單', '所有分頁、分組和代碼', { checked: true }),
+        { class: 'options', role: 'radiogroup', 'aria-label': t('export.scope') },
+        option(ALL_TAB, t('export.all'), t('export.allText'), { checked: true }),
         option(
           state.tab,
-          onAll ? '目前分頁' : `目前分頁（${tabLabel(state.tab)}）`,
-          onAll ? '切到自訂分頁後，才能只匯出一個分頁' : '只有這個分頁裡的分組和代碼',
+          onAll ? t('export.tab') : t('export.tabNamed', { tab: tabLabel(state.tab) }),
+          onAll ? t('export.tabDisabled') : t('export.tabText'),
           { disabled: onAll },
         ),
       ),
-      dialogNote('匯出的 JSON 檔可以備份，或分享給別人匯入。'),
+      dialogNote(t('export.note')),
     ],
     actions: [
-      { label: '取消' },
+      { label: t('cancel') },
       {
-        label: '匯出',
+        label: t('export'),
         icon: 'download',
         className: 'primary',
         onClick: () => {
-          state.notice = `已匯出 ${downloadExport(scope)}`;
+          state.notice = t('export.done', { file: downloadExport(scope) });
           renderStatus();
         },
       },
@@ -2061,13 +2087,13 @@ function showExportDialog() {
 function showImportFileDialog() {
   showDialog({
     content: [
-      dialogTitle('從檔案匯入'),
-      el('p', {}, '選一個 MultiList 匯出的 JSON 檔（最大 1\u00a0MB）。'),
-      dialogNote('匯入的內容會加在現有清單後面，不會蓋掉任何東西。'),
+      dialogTitle(t('importFile.title')),
+      el('p', {}, t('importFile.body')),
+      dialogNote(t('importFile.note')),
     ],
     actions: [
-      { label: '取消' },
-      { label: '選擇檔案', icon: 'upload', className: 'primary', onClick: () => document.getElementById('import-file').click() },
+      { label: t('cancel') },
+      { label: t('importFile.choose'), icon: 'upload', className: 'primary', onClick: () => document.getElementById('import-file').click() },
     ],
   });
 }
@@ -2094,7 +2120,7 @@ async function importFile(file) {
   }
   const { tabs, groups, symbols } = result.added;
   if (tabs.length === 0 && groups === 0 && symbols === 0) {
-    showTransferResult('檔案裡沒有新的分頁、分組或代碼，清單沒有變動。');
+    showTransferResult(t('importFile.nothing'));
     return;
   }
   state.groups = result.groups;
@@ -2102,7 +2128,7 @@ async function importFile(file) {
   if (tabs.length > 0) persistTabs();
   persist();
   selectTab(tabs[0]?.id ?? ALL_TAB);
-  showTransferResult(`已匯入 ${tabs.length} 個分頁、${groups} 個分組、${symbols} 個代碼`);
+  showTransferResult(t('import.done', { tabs: tabs.length, groups, symbols }));
 }
 
 function setUpTransfer() {
@@ -2115,7 +2141,7 @@ function setUpTransfer() {
     try {
       await importFile(file);
     } catch (error) {
-      showTransferResult(`匯入失敗：${error.message}`, true);
+      showTransferResult(t('importFile.failed', { message: error.message }), true);
     }
   });
 }
@@ -2128,7 +2154,7 @@ async function showShareDialog() {
     role: 'switch',
     class: 'switch',
     'aria-checked': String(await hasConsent()),
-    'aria-label': '匿名分享觀察清單',
+    'aria-label': t('share.label'),
     onclick: async () => {
       const on = toggle.getAttribute('aria-checked') !== 'true';
       toggle.setAttribute('aria-checked', String(on));
@@ -2141,12 +2167,12 @@ async function showShareDialog() {
   chrome.storage.onChanged.addListener(follow);
   const dialog = showDialog({
     content: [
-      dialogTitle('匿名分享'),
-      el('label', { class: 'switch-row' }, el('span', {}, '匿名分享觀察清單'), toggle),
-      el('p', {}, 'MultiList 會匿名記錄你的觀察清單，不含任何能認出你的個人資訊。'),
-      dialogNote('關閉後停止上傳，已上傳的資料不會刪除。', privacyLink()),
+      dialogTitle(t('share.title')),
+      el('label', { class: 'switch-row' }, el('span', {}, t('share.label')), toggle),
+      el('p', {}, t('share.body')),
+      privacyNote(t('share.note')),
     ],
-    actions: [{ label: '完成', className: 'primary' }],
+    actions: [{ label: t('done'), className: 'primary' }],
   });
   dialog.addEventListener('close', () => chrome.storage.onChanged.removeListener(follow));
 }
@@ -2181,7 +2207,7 @@ function saveTheme() {
   themeSaveTimer = null;
   const write = theme ? chrome.storage.sync.set({ [THEME_KEY]: theme }) : chrome.storage.sync.remove(THEME_KEY);
   write.catch((error) => {
-    state.alert = `顏色儲存失敗：${error.message}`;
+    state.alert = t('theme.failed', { message: error.message });
     renderStatus();
   });
 }
@@ -2248,10 +2274,10 @@ function showThemeSheet() {
       label,
       el('span', { class: 'hex' }),
     );
-  const area = el('div', { class: 'sv-area', role: 'slider', tabIndex: 0, 'aria-label': '飽和度與亮度' }, el('span', { class: 'thumb' }));
+  const area = el('div', { class: 'sv-area', role: 'slider', tabIndex: 0, 'aria-label': t('theme.svArea') }, el('span', { class: 'thumb' }));
   const hue = el(
     'div',
-    { class: 'hue-bar', role: 'slider', tabIndex: 0, 'aria-label': '色相', 'aria-valuemin': '0', 'aria-valuemax': '360' },
+    { class: 'hue-bar', role: 'slider', tabIndex: 0, 'aria-label': t('theme.hue'), 'aria-valuemin': '0', 'aria-valuemax': '360' },
     el('span', { class: 'thumb' }),
   );
   const hexInput = el('input', {
@@ -2268,17 +2294,17 @@ function showThemeSheet() {
   const customLabel = el('p', { class: 'sheet-label' });
   const contrastLine = el('p', { class: 'contrast' });
   const presets = el('div', { class: 'presets' }, presetButton('light', 'sun', 'Light Mode'), presetButton('dark', 'moon', 'Dark Mode'));
-  const targets = el('div', { class: 'targets', role: 'group', 'aria-label': '要調整的顏色' }, targetTab('bg', '背景'), targetTab('text', '文字'));
+  const targets = el('div', { class: 'targets', role: 'group', 'aria-label': t('theme.targets') }, targetTab('bg', t('theme.bg')), targetTab('text', t('theme.text')));
 
   function paint(keepInput = false) {
     const { h, s, v } = picker.hsv;
     const hex = picker.theme[picker.target];
     area.style.background = `linear-gradient(to top, #000000, transparent), linear-gradient(to right, #ffffff, hsl(${h} 100% 50%))`;
     Object.assign(area.firstElementChild.style, { left: `${s * 100}%`, top: `${(1 - v) * 100}%`, background: hex });
-    area.setAttribute('aria-valuetext', `飽和度 ${Math.round(s * 100)}%，亮度 ${Math.round(v * 100)}%`);
+    area.setAttribute('aria-valuetext', t('theme.svValue', { s: Math.round(s * 100), v: Math.round(v * 100) }));
     Object.assign(hue.firstElementChild.style, { left: `${(h / 360) * 100}%`, background: `hsl(${h} 100% 50%)` });
     hue.setAttribute('aria-valuenow', String(Math.round(h)));
-    hue.setAttribute('aria-valuetext', `色相 ${Math.round(h)} 度`);
+    hue.setAttribute('aria-valuetext', t('theme.hueValue', { h: Math.round(h) }));
     for (const tab of targets.children) {
       const color = picker.theme[tab.dataset.target];
       tab.setAttribute('aria-pressed', String(tab.dataset.target === picker.target));
@@ -2287,13 +2313,13 @@ function showThemeSheet() {
     }
     const preset = theme ? presetOf(picker.theme) : null;
     for (const button of presets.children) button.setAttribute('aria-pressed', String(button.dataset.preset === preset));
-    customLabel.textContent = theme && !preset ? '自訂（目前使用中）' : '自訂';
-    hexInput.setAttribute('aria-label', `${picker.target === 'bg' ? '背景' : '文字'}色碼`);
+    customLabel.textContent = t(theme && !preset ? 'theme.customActive' : 'theme.custom');
+    hexInput.setAttribute('aria-label', t('theme.hexLabel', { target: t(picker.target === 'bg' ? 'theme.bg' : 'theme.text') }));
     if (!keepInput) hexInput.value = hex.toUpperCase();
     const ratio = contrast(picker.theme.bg, picker.theme.text);
     const good = ratio >= 4.5;
     contrastLine.className = `contrast ${good ? 'good' : 'poor'}`;
-    contrastLine.replaceChildren(svgIcon(good ? 'check' : 'triangleAlert'), `對比 ${ratioText(ratio)} : 1，${good ? '看得清楚' : '文字可能看不清楚'}`);
+    contrastLine.replaceChildren(svgIcon(good ? 'check' : 'triangleAlert'), t('theme.contrast', { ratio: ratioText(ratio), verdict: t(good ? 'theme.good' : 'theme.poor') }));
   }
 
   function useColors() {
@@ -2353,20 +2379,20 @@ function showThemeSheet() {
   const dialog = showDialog({
     className: 'theme-sheet',
     content: [
-      dialogTitle('背景與文字顏色'),
-      el('p', { class: 'sheet-subtitle' }, '選了馬上套用，上面的清單就是預覽。'),
-      el('p', { class: 'sheet-label' }, '預設配色'),
+      dialogTitle(t('theme.title')),
+      el('p', { class: 'sheet-subtitle' }, t('theme.subtitle')),
+      el('p', { class: 'sheet-label' }, t('theme.presets')),
       presets,
       customLabel,
       targets,
       area,
       hue,
-      el('div', { class: 'hex-row' }, el('label', { class: 'hex-label' }, '色碼', hexInput), contrastLine),
-      el('p', { class: 'sheet-note' }, '次要文字和分隔線會跟著自動調整；漲跌的綠色、紅色不變。'),
+      el('div', { class: 'hex-row' }, el('label', { class: 'hex-label' }, t('theme.hex'), hexInput), contrastLine),
+      el('p', { class: 'sheet-note' }, t('theme.note')),
     ],
     actions: [
       {
-        label: '跟隨系統',
+        label: t('theme.system'),
         className: 'plain',
         autofocus: false,
         onClick: () => {
@@ -2374,7 +2400,7 @@ function showThemeSheet() {
           saveTheme();
         },
       },
-      { label: '完成', className: 'primary', autofocus: true },
+      { label: t('done'), className: 'primary', autofocus: true },
     ],
   });
   dialog.addEventListener('close', () => {
@@ -2384,9 +2410,59 @@ function showThemeSheet() {
   paint();
 }
 
+// The static text of sidepanel.html. The rest of the panel gets its text each time it draws.
+function translatePage() {
+  document.documentElement.lang = getLanguage() === 'en' ? 'en' : 'zh-Hant';
+  for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
+  for (const node of document.querySelectorAll('[data-i18n-label]')) node.setAttribute('aria-label', t(node.dataset.i18nLabel));
+  for (const node of document.querySelectorAll('[data-i18n-title]')) node.title = t(node.dataset.i18nTitle);
+  document.getElementById('privacy-link').href = privacyUrl();
+}
+
+// localStorage keeps the last language, so the next panel draws in it before
+// chrome.storage.sync answers, like theme-boot.js does for the colors.
+function cachedLanguage() {
+  try {
+    return localStorage.getItem('language');
+  } catch {
+    return null;
+  }
+}
+
+function useLanguage(language) {
+  setLanguage(language);
+  try {
+    localStorage.setItem('language', language);
+  } catch {
+    // Without storage the next panel starts in the browser language.
+  }
+  translatePage();
+}
+
+// Draws the panel again in the new language. A tab name that is being typed stays, like in syncTabs.
+// An open popup keeps its language until it closes.
+function switchLanguage(language) {
+  if (language === getLanguage()) return;
+  useLanguage(language);
+  if (!state.editingTab && !state.creatingTab) renderTabs();
+  render();
+  renderStatus();
+  renderAccount();
+}
+
+// A pick in the menu is saved, so it wins over the browser language and follows the Chrome account.
+function chooseLanguage(language) {
+  switchLanguage(language);
+  chrome.storage.sync.set({ [LANGUAGE_KEY]: language }).catch((error) => {
+    state.alert = t('language.failed', { message: error.message });
+    renderStatus();
+  });
+}
+
 function watchStorage() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
+    if (changes[LANGUAGE_KEY]) switchLanguage(pickLanguage(changes[LANGUAGE_KEY].newValue, chrome.i18n.getUILanguage()));
     // An open sheet owns the colors, so an echo of its own earlier save does not undo a newer pick.
     if (changes[THEME_KEY] && !themeSheetOpen) applyTheme(changes[THEME_KEY].newValue ?? null);
     if (tabsChanged(changes)) syncTabs();
@@ -2404,14 +2480,14 @@ async function start() {
     loadCurrentTab(),
     loadTabs(),
     loadColumnWidths(),
-    chrome.storage.sync.get(THEME_KEY),
+    chrome.storage.sync.get([THEME_KEY, LANGUAGE_KEY]),
   ]);
   applyTheme(saved[THEME_KEY] ?? null);
+  useLanguage(pickLanguage(saved[LANGUAGE_KEY], chrome.i18n.getUILanguage()));
   baseline = docOf(state.groups, tabs.names, tabs.custom);
   // Lets the background page send the weekly upload if it is due, and pull the cloud copy.
   chrome.runtime.sendMessage({ type: 'panelOpened' }).catch(() => {});
   document.getElementById('app-version').textContent = `v${chrome.runtime.getManifest().version}`;
-  document.getElementById('privacy-link').href = PRIVACY_URL;
   applyTabs(tabs);
   setUpColumns(widths);
   setUpTopbar();
@@ -2444,4 +2520,6 @@ function pingBackground() {
   if (!document.hidden) chrome.runtime.sendMessage({ type: 'panelVisible' }).catch(() => {});
 }
 
+// The static text gets a language before the first paint. start() then reads the saved choice.
+useLanguage(pickLanguage(cachedLanguage(), chrome.i18n.getUILanguage()));
 start();

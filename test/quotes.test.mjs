@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
+import { setLanguage } from '../extension/lib/i18n.js';
 import {
   fetchQuotes,
   parseAlpaca,
@@ -435,6 +436,20 @@ test('resolveSymbol explains each failure', async () => {
 
   globalThis.fetch = async () => jsonResponse({}, 429);
   await assert.rejects(resolveSymbol('AAPL'), /查詢 AAPL 失敗（HTTP 429）/);
+});
+
+test('resolveSymbol explains each failure in English when the panel is in English', async () => {
+  setLanguage('en');
+  try {
+    globalThis.fetch = async (url) =>
+      new URL(url).pathname.includes('/search') ? jsonResponse({ quotes: [] }) : jsonResponse({}, 404);
+    await assert.rejects(resolveSymbol('ZZZZZ'), { message: 'ZZZZZ not found' });
+    await assert.rejects(resolveSymbol('台積電'), { message: '“台積電” is not supported. Use a Taiwan, US, European, Korean or crypto symbol.' });
+    globalThis.fetch = async () => jsonResponse({}, 429);
+    await assert.rejects(resolveSymbol('AAPL'), { message: 'Could not look up AAPL (HTTP 429)' });
+  } finally {
+    setLanguage('zh-TW');
+  }
 });
 
 // Real responses from 2026-11-12, keyed by market. The unknown: keys are answers for a pair that does not exist.

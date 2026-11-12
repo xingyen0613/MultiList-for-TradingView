@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { setLanguage } from '../extension/lib/i18n.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from '../extension/lib/tradingview.js';
 
 const fixture = (name) =>
@@ -89,4 +90,17 @@ test('symbols before the first section go to a group named after the list, and e
     { id: 2, name: '沒有區段', count: 1, groups: [{ name: '沒有區段', symbolIds: ['BINANCE:SUIUSDT.P'] }] },
     { id: 3, name: '空的', count: 0, groups: [] },
   ]);
+});
+
+test('parseSearch names the kinds in the panel language', () => {
+  setLanguage('en');
+  try {
+    const byId = new Map(parseSearch(fixture('tv-search-sui')).map((item) => [item.id, item]));
+    assert.equal(byId.get('BINANCE:SUIUSDT').kind, 'Spot');
+    assert.equal(byId.get('BINANCE:SUIUSDT.P').kind, 'Perpetual');
+    assert.equal(byId.get('NYSE:SUI').kind, 'Stock');
+    assert.equal(byId.get('COINBASE:SUIX2026').kind, 'Futures');
+  } finally {
+    setLanguage('zh-TW');
+  }
 });

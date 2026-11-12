@@ -89,10 +89,10 @@ Works in desktop Chromium browsers, such as Chrome, Edge and Brave.
 How to use
 1. Click the MultiList icon in the toolbar to open the side panel.
 2. Open a TradingView chart and sign in.
-3. Press 一鍵匯入 (Import) to bring in your lists, or 新增代碼 (Add symbol) to add your own.
+3. Press the import button to bring in your lists, or Add symbol to add your own.
 4. Click an entry in the side panel to switch the chart.
 
-The interface is in Traditional Chinese.
+The interface is in English and Traditional Chinese. It follows your browser language, and you can switch it in the ⋯ menu.
 
 Privacy
 • Without sign-in and without anonymous sharing, nothing is sent to our server.
@@ -186,18 +186,18 @@ Quote requests contain only the symbols in the user's list, plus the user's own 
 
 Certify all three statements: the data is not sold, not used for purposes unrelated to the single purpose, and not used for creditworthiness or lending.
 
-**Privacy policy URL**: https://xingyen0613.github.io/MultiList-for-TradingView/privacy.html (live on GitHub Pages; the footer of the side panel links to the Traditional Chinese page `privacy.zh-TW.html`).
+**Privacy policy URL**: https://xingyen0613.github.io/MultiList-for-TradingView/privacy.html (live on GitHub Pages; the footer of the side panel links to this page in English, and to `privacy.zh-TW.html` in Traditional Chinese).
 
 ## Test instructions for the review team
 
 ```
 No account is needed to review the extension. All list features work without sign-in.
 
-Optional: Google sign-in syncs the list between browsers. The sign-in window opens the first time the side panel opens. It also opens from the cloud button at the top of the side panel, or from the ⋯ menu → 用 Google 登入 (Sign in with Google). In the window, choose 使用 Google 帳戶登入 (Sign in with a Google account). Any Google account works. After sign-in, the ⋯ menu shows the signed-in email, and 刪除帳號… (Delete account) deletes the server data.
+Optional: Google sign-in syncs the list between browsers. The sign-in window opens the first time the side panel opens. It also opens from the cloud button at the top of the side panel, or from the ⋯ menu → Sign in with Google. In the window, choose Sign in with Google. Any Google account works. After sign-in, the ⋯ menu shows the signed-in email, and Delete account… deletes the server data.
 
 Symbol search, chart switching and the TradingView import need an open tab on https://www.tradingview.com/chart/. The import also needs a TradingView account with at least one watchlist.
 
-The interface is in Traditional Chinese.
+The interface follows the browser language: English, or Traditional Chinese for a Chinese browser. To change it, open the ⋯ menu and pick English or 繁體中文 under Language.
 ```
 
 ## Distribution

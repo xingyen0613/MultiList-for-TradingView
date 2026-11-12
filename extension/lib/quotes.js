@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { EXCHANGE_MARKETS, europeIdOf, marketOf, parseInput, splitPair, tickerOf, toYahooTicker } from './symbols.js';
 
 const TIMEOUT_MS = 10_000;
@@ -504,7 +505,7 @@ const RESOLVERS = {
 
 export async function resolveSymbol(raw) {
   const parsed = parseInput(raw);
-  if (!parsed) throw new Error(`不支援「${raw}」，請用台股、美股、歐股、韓股或加密貨幣代碼`);
+  if (!parsed) throw new Error(t('resolve.unsupported', { raw }));
   // A failed market does not stop the others, because a typed pair is looked up on up to 7 exchanges.
   let failure = null;
   for (const market of parsed.markets) {
@@ -515,6 +516,6 @@ export async function resolveSymbol(raw) {
       failure ??= error;
     }
   }
-  if (failure) throw new Error(`查詢 ${parsed.ticker} 失敗（${failure.message}）`);
-  throw new Error(`找不到 ${parsed.ticker}`);
+  if (failure) throw new Error(t('resolve.failed', { ticker: parsed.ticker, message: failure.message }));
+  throw new Error(t('resolve.notFound', { ticker: parsed.ticker }));
 }

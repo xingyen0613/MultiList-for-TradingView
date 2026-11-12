@@ -256,10 +256,11 @@ input {
   font-weight: 600;
 }
 
+/* The label column fits its longest label, so an English one such as Binance Perpetual stays on one line. */
 .tip-rows {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  row-gap: 4px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
   margin: 0;
   font-size: 12px;
 }
@@ -1540,12 +1541,15 @@ input {
   background: var(--hover);
 }
 
+/* A long name, such as Background in a narrow English panel, moves the hex code to a second line. */
 .target {
   display: flex;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px;
+  gap: 0 8px;
+  min-height: 34px;
+  padding: 3px 10px;
   border: 0;
   border-radius: 4px;
   background: none;
