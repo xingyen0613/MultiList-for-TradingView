@@ -66,7 +66,7 @@ Rules for the descriptions (Chrome Web Store keyword spam policy and spam FAQ):
 • 匿名分享預設關閉，只送代碼和雜湊後的 ID，不含任何名稱。
 • 隨時可以在右上角「⋯」選單刪除帳號。
 
-這是獨立的個人專案，與 TradingView 沒有關係，也未獲其授權或背書。
+MultiList 由獨立開發者製作，是第三方工具，不是 TradingView 官方產品。
 ```
 
 **Description, en**:
@@ -103,7 +103,7 @@ Privacy
 • Anonymous sharing is off by default. It sends only symbols and hashed IDs, never names.
 • You can delete your account in the ⋯ menu at any time.
 
-This is an independent project. It is not affiliated with, endorsed by, or connected to TradingView.
+MultiList is a third-party tool by an independent developer, not an official TradingView product.
 ```
 
 **Graphics** (made by `node scripts/graphics/build.mjs`):

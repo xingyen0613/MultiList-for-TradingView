@@ -9,7 +9,7 @@ A Chrome side panel watchlist for people who chart on TradingView. Create as man
   <img src="docs/screenshot-search-dark.png" alt="Search results for sui with the crypto filter, in dark mode" width="340">
 </p>
 
-This is an independent personal project. It is not affiliated with TradingView.
+MultiList is a third-party tool by an independent developer, not an official TradingView product.
 
 The interface is in English and Traditional Chinese. It follows your browser language, and you can switch it in the **⋯** menu.
 

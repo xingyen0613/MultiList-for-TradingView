@@ -9,7 +9,7 @@
   <img src="docs/screenshot-search-dark.png" alt="深色模式下，用加密貨幣篩選搜尋 sui 的結果" width="340">
 </p>
 
-這是獨立的個人專案，與 TradingView 沒有關係。
+MultiList 由獨立開發者製作，是第三方工具，不是 TradingView 官方產品。
 
 ## 功能
 
