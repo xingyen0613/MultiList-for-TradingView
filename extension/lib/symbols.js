@@ -5,6 +5,53 @@ const US_EXCHANGES = new Set(['NASDAQ', 'NYSE', 'AMEX', 'CBOE']);
 const CRYPTO_PAIR = /^[A-Z0-9]{2,}(USDT|USDC|FDUSD|BTC|ETH|BNB)$/;
 const DEFAULT_CHART_URL = 'https://www.tradingview.com/chart/';
 
+// Indices by Yahoo ticker, with a name and the TradingView ids. One index has several ids, for example
+// TVC:VIX and CBOE:VIX, so the list has the ids that the TradingView search shows first. Tested on
+// 2026-11-20: the TradingView search has each id, and Yahoo has a price for each ticker. The names are
+// here because Yahoo names are cut off or wrong, for example "Northern Trust iBoxx 5-Year Tar" for ^MOVE.
+// TWSE:IX0001 (TAIEX) and TPEX:IX0043 (OTC) are not here, because TWSE MIS has them, like Taiwan stocks.
+// Yahoo has no OTC index.
+const INDICES = {
+  // Volatility
+  '^VIX': { name: 'CBOE Volatility Index', ids: ['TVC:VIX', 'CBOE:VIX'] },
+  '^VIX9D': { name: 'CBOE S&P 500 9-Day Volatility Index', ids: ['CBOE:VIX9D'] },
+  '^VIX3M': { name: 'CBOE S&P 500 3-Month Volatility Index', ids: ['CBOE:VIX3M'] },
+  '^VVIX': { name: 'CBOE VIX Volatility Index', ids: ['CBOE:VVIX'] },
+  '^VXN': { name: 'CBOE NASDAQ 100 Volatility Index', ids: ['CBOE:VXN'] },
+  '^OVX': { name: 'CBOE Crude Oil Volatility Index', ids: ['CBOE:OVX'] },
+  '^GVZ': { name: 'CBOE Gold Volatility Index', ids: ['CBOE:GVZ'] },
+  '^MOVE': { name: 'ICE BofAML MOVE Index', ids: ['TVC:MOVE', 'ICE:MOVE'] },
+  // United States
+  '^GSPC': { name: 'S&P 500', ids: ['SP:SPX', 'TVC:SPX'] },
+  '^NDX': { name: 'NASDAQ-100', ids: ['NASDAQ:NDX'] },
+  '^IXIC': { name: 'NASDAQ Composite', ids: ['NASDAQ:IXIC', 'TVC:IXIC'] },
+  '^DJI': { name: 'Dow Jones Industrial Average', ids: ['DJ:DJI', 'TVC:DJI'] },
+  '^RUT': { name: 'Russell 2000', ids: ['TVC:RUT', 'CBOEFTSE:RUT', 'FTSE:RUT'] },
+  '^SOX': { name: 'PHLX Semiconductor', ids: ['NASDAQ:SOX', 'TVC:SOX'] },
+  'DX-Y.NYB': { name: 'U.S. Dollar Index', ids: ['TVC:DXY', 'ICEUS:DXY', 'INDEX:DXY'] },
+  '^FVX': { name: 'US 5-Year Treasury Yield', ids: ['TVC:US05Y'] },
+  '^TNX': { name: 'US 10-Year Treasury Yield', ids: ['TVC:US10Y'] },
+  '^TYX': { name: 'US 30-Year Treasury Yield', ids: ['TVC:US30Y'] },
+  // Asia
+  '^TWII': { name: 'TAIEX', ids: ['INDEX:TAIEX'] },
+  '^N225': { name: 'Nikkei 225', ids: ['TVC:NI225', 'INDEX:NKY'] },
+  '^KS11': { name: 'KOSPI Composite Index', ids: ['KRX:KOSPI', 'TVC:KOSPI'] },
+  '^HSI': { name: 'Hang Seng Index', ids: ['HSI:HSI', 'TVC:HSI', 'INDEX:HSI'] },
+  '000001.SS': { name: 'SSE Composite Index', ids: ['SSE:000001', 'INDEX:000001'] },
+  '^NSEI': { name: 'NIFTY 50', ids: ['NSE:NIFTY'] },
+  // Europe
+  '^GDAXI': { name: 'DAX', ids: ['XETR:DAX', 'TVC:DEU40'] },
+  '^FTSE': { name: 'FTSE 100', ids: ['TVC:UKX', 'FTSE:UKX'] },
+  '^STOXX50E': { name: 'EURO STOXX 50', ids: ['TVC:SX5E', 'STOXX:SX5E'] },
+  '^FCHI': { name: 'CAC 40', ids: ['TVC:CAC40', 'EURONEXT:PX1'] },
+};
+const INDEX_BY_ID = new Map(
+  Object.entries(INDICES).flatMap(([yahoo, { name, ids }]) => ids.map((id) => [id, { yahoo, name }])),
+);
+
+// { yahoo, name } of an index, or undefined if the symbol is not in the list.
+export const indexOf = (symbolId) => INDEX_BY_ID.get(symbolId);
+
 // The Yahoo suffix of each European exchange, and its TradingView exchange.
 // Yahoo writes a share class as VOLV-B.ST or BT-A.L. TradingView writes VOLV_B on the Nordic exchanges
 // and BT.A on the others. Tested on 2026-11-07 with one stock on each exchange.
@@ -69,7 +116,9 @@ function exchangeMarketOf(exchange, ticker, perp) {
 // Returns the market that has a quote source, or null. A symbol of another exchange,
 // for example COINBASE:SUIUSD, can be in a group and open the chart, but has no quote.
 // TradingView writes every exchange's pairs the same way: MNTUSDT for spot and MNTUSDT.P for a perpetual contract.
+// An index comes first, because XETR:DAX and KRX:KOSPI are on stock exchanges.
 export function marketOf(symbolId) {
+  if (INDEX_BY_ID.has(symbolId)) return 'index';
   const [exchange, ticker = ''] = symbolId.split(':');
   const perp = ticker.endsWith('.P');
   if (TAIWAN_EXCHANGES.has(exchange)) return 'tw';
@@ -116,12 +165,14 @@ const fromYahooTicker = (ticker) => ticker.replaceAll('-', '.');
 
 // Returns the ticker and the markets to look it up in, or null if unsupported.
 // A European symbol also gets the Yahoo tickers to try. Without them, the lookup searches all of Europe.
+// An index keeps the full id as its ticker, because VIX alone does not tell TVC:VIX from CBOE:VIX.
 export function parseInput(raw) {
   const text = raw.trim().toUpperCase();
 
   const fullForm = text.match(/^([A-Z]+):([A-Z0-9._-]+)$/);
   if (fullForm) {
     const [, exchange, ticker] = fullForm;
+    if (INDEX_BY_ID.has(text)) return { ticker: text, markets: ['index'] };
     if (EUROPE_EXCHANGES.has(exchange)) return { ticker, markets: ['eu'], yahoo: europeTickersOf(exchange, ticker) };
     const market = marketOf(text);
     return market ? { ticker, markets: [market] } : null;

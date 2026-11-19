@@ -13,7 +13,7 @@ const placeholders = (text) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => m
 const SOURCES = ['sidepanel.js', 'lib/quotes.js', 'lib/transfer.js', 'lib/tradingview.js'];
 // Keys that the code builds from a variable.
 const BUILT_KEYS = [
-  ...['tw', 'us', 'eu', 'kr', 'crypto', 'perp'].map((market) => `market.${market}`),
+  ...['tw', 'us', 'eu', 'kr', 'index', 'crypto', 'perp'].map((market) => `market.${market}`),
   ...['stock', 'fund', 'dr', 'structured', 'futures', 'swap', 'spot', 'index', 'forex', 'bond', 'economic'].map((kind) => `kind.${kind}`),
 ];
 

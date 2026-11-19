@@ -16,7 +16,7 @@ MultiList 由獨立開發者製作，是第三方工具，不是 TradingView 官
 - 分組數量沒有限制，同一個代碼可以放進多個分組，也可以不放進分組。
 - 可以用代碼或公司名稱（中文或英文）搜尋。結果來自 TradingView 搜尋，包含所有交易所、現貨、永續合約、期貨。
 - 一鍵匯入 TradingView 觀察清單。每個清單變成一個分頁，每個區段變成一個分組。
-- 有報價的市場：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、幣安、Bybit、OKX、Bitget、Gate、MEXC 的加密貨幣現貨與永續合約，以及 KuCoin 現貨。其他標的也可以加入，例如其他交易所、期貨、指數、外匯。這些標的沒有價格，但點選後一樣會切換圖表。
+- 有報價的市場：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、VIX 等常用指數、幣安、Bybit、OKX、Bitget、Gate、MEXC 的加密貨幣現貨與永續合約，以及 KuCoin 現貨。其他標的也可以加入，例如其他交易所、期貨、外匯。這些標的沒有價格，但點選後一樣會切換圖表。
 - 「全部」分頁顯示所有分組。新安裝時另外有一個自訂分頁「分頁一」。按分頁列右端的 **+** 可以新增分頁，每個分頁放哪些分組由你決定。自訂分頁只顯示自己的分組，這些分組也會出現在「全部」。不在分組裡的代碼顯示在分組上方。在「全部」，自訂分頁中不在分組裡的代碼會列在該分頁的名稱下。
 - 按分頁列右端的鉛筆，可以重新命名目前的分頁。「全部」清空名稱就會還原預設。
 - 按自訂分頁上的 ×，可以刪除分頁。× 會顯示在目前的分頁上，滑鼠移到其他分頁時也會顯示。刪除前會跳出確認視窗。分頁裡的分組和不在分組裡的代碼會留在「全部」。
@@ -55,7 +55,7 @@ MultiList 由獨立開發者製作，是第三方工具，不是 TradingView 官
 
 第一次打開側邊欄時，會詢問一次要不要用 Google 登入。之後要登入，按右上角的雲朵（只在沒登入時出現），或「⋯」選單的「用 Google 登入」。「⋯」選單裡還有 TradingView 一鍵匯入、匯出與匯入、API key、顏色、匿名分享、登出和刪除帳號。
 
-搜尋需要在 Chrome 開著一個 TradingView 分頁。沒有開時，請輸入完整代碼後按 Enter。可以一次輸入多個，例如 `2330 AAPL IFX BTCUSDT`。純數字代碼會當成台股查詢。其他代碼先查美股，查不到再查歐股。你也可以輸入完整格式，例如 `NYSE:TSM`、`XETR:IFX`、`KRX:005930`、`BINANCE:SUIUSDT.P`、`BYBIT:MNTUSDT`、`OKX:SUIUSDT.P`。純加密貨幣交易對，例如 `MNTUSDT`，會先查 Binance，查不到再依序查 Bybit、OKX、Bitget、Gate、KuCoin、MEXC，用第一個找到的。韓股請輸入完整格式，因為純數字代碼會當成台股查詢。
+搜尋需要在 Chrome 開著一個 TradingView 分頁。沒有開時，請輸入完整代碼後按 Enter。可以一次輸入多個，例如 `2330 AAPL IFX BTCUSDT`。純數字代碼會當成台股查詢。其他代碼先查美股，查不到再查歐股。你也可以輸入完整格式，例如 `NYSE:TSM`、`XETR:IFX`、`KRX:005930`、`TVC:VIX`、`BINANCE:SUIUSDT.P`、`BYBIT:MNTUSDT`、`OKX:SUIUSDT.P`。純加密貨幣交易對，例如 `MNTUSDT`，會先查 Binance，查不到再依序查 Bybit、OKX、Bitget、Gate、KuCoin、MEXC，用第一個找到的。韓股請輸入完整格式，因為純數字代碼會當成台股查詢。
 
 如果歐股和美股的代碼相同，請加上交易所。可以用 TradingView 格式，例如 `XETR:SAP`，或 Yahoo 格式，例如 `SAP.DE`。
 
@@ -76,6 +76,17 @@ MultiList 由獨立開發者製作，是第三方工具，不是 TradingView 官
 | 維也納 | `VIE:OMV` | `OMV.VI` |
 | 華沙 | `GPW:PKO` | `PKO.WA` |
 
+以下指數有報價。可以從搜尋結果選，或輸入 TradingView 格式，例如 `TVC:VIX`、`SP:SPX`、`TVC:US10Y`。
+
+| 類別 | 指數 |
+| --- | --- |
+| 波動率 | VIX、VIX9D、VIX3M、VVIX、VXN（那斯達克 100）、OVX（原油）、GVZ（黃金）、MOVE（美債） |
+| 美國 | S&P 500、那斯達克 100、那斯達克綜合、道瓊工業、羅素 2000、費城半導體（SOX）、美元指數（DXY）、美債 5 年、10 年、30 年殖利率 |
+| 亞洲 | 台股加權、櫃買指數、日經 225、KOSPI、恆生、上證綜合、NIFTY 50 |
+| 歐洲 | DAX、富時 100、歐洲斯托克 50、CAC 40 |
+
+部分指數的價格有延遲。2026-11-20 實測，VIX、羅素 2000 和美債殖利率約慢 15 分鐘。加權指數用 `TWSE:IX0001`、櫃買指數用 `TPEX:IX0043` 時，價格和台股一樣來自 TWSE MIS。價格顯示到小數第二位，所以美債殖利率的漲跌小於 0.005 時會顯示 0.00。
+
 ## 匯入 TradingView 觀察清單
 
 1. 在 Chrome 打開 TradingView 並登入。
@@ -95,6 +106,7 @@ Chrome 同步的上限是每個分組 8 KB（約 150 個代碼），全部 100 K
 | 美股盤前盤後 | 無 | Yahoo Finance |
 | 歐股 | 無 | Yahoo Finance |
 | 韓股 | 無 | Yahoo Finance |
+| 指數 | 無 | Yahoo Finance |
 | 幣安現貨 | 不需要 | Binance |
 | 幣安永續合約 | 不需要 | Binance 合約 API |
 | Bybit 現貨與永續合約 | 不需要 | Bybit API |
@@ -106,7 +118,7 @@ Chrome 同步的上限是每個分組 8 KB（約 150 個代碼），全部 100 K
 
 在右上角「⋯」選單的「報價 API key…」輸入 key。Key 只存在這台電腦，不會同步。如果有 key 的來源失敗，側邊欄會改用沒有 key 的來源，並顯示錯誤訊息。
 
-TWSE MIS 和 Yahoo Finance 不是有公開文件的 API。它們隨時可能變更或封鎖請求，Yahoo 條款也限制自動化存取。如果你要用有文件的來源，請加上 key。直接輸入的代碼和匯入的代碼，會透過 TWSE MIS 或 Yahoo 查詢交易所和名稱。從搜尋結果加入的歐股，會透過 Yahoo 查詢 Yahoo 代碼。
+TWSE MIS 和 Yahoo Finance 不是有公開文件的 API。它們隨時可能變更或封鎖請求，Yahoo 條款也限制自動化存取。如果你要用有文件的來源，請加上 key。直接輸入的代碼和匯入的代碼，會透過 TWSE MIS 或 Yahoo 查詢交易所和名稱。指數的名稱來自插件內建的清單。從搜尋結果加入的歐股，會透過 Yahoo 查詢 Yahoo 代碼。
 
 搜尋和匯入使用 TradingView，請看下面的限制。
 

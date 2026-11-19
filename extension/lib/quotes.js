@@ -1,5 +1,14 @@
 import { t } from './i18n.js';
-import { EXCHANGE_MARKETS, europeIdOf, marketOf, parseInput, splitPair, tickerOf, toYahooTicker } from './symbols.js';
+import {
+  EXCHANGE_MARKETS,
+  europeIdOf,
+  indexOf,
+  marketOf,
+  parseInput,
+  splitPair,
+  tickerOf,
+  toYahooTicker,
+} from './symbols.js';
 
 const TIMEOUT_MS = 10_000;
 const MIS_CHUNK = 100; // Tested: one request returns 100 symbols.
@@ -79,6 +88,21 @@ export function parseYahooSpark(json) {
     const price = toNumber((row.close ?? []).findLast((value) => toNumber(value) !== null));
     if (price === null) continue;
     quotes.set(yahooTicker, quoteFromPrevious(price, toNumber(row.previousClose)));
+  }
+  return quotes;
+}
+
+// An index uses fulldayPrice and fulldayChange. Tested on 2026-11-20, after the Asian close:
+// previousClose of ^TWII, ^HSI and 000001.SS was the close of two sessions before, but fulldayChange
+// was from the session before (^TWII −1768.02, the same as TWSE MIS). An index has no pre-market or
+// after-hours trades, so fulldayPrice is the price of the session, unlike for US stocks.
+export function parseIndexSpark(json) {
+  const quotes = new Map();
+  for (const [yahooTicker, row] of Object.entries(json)) {
+    const price = toNumber(row.fulldayPrice);
+    if (price === null) continue;
+    const change = toNumber(row.fulldayChange);
+    quotes.set(yahooTicker, quoteFromPrevious(price, change === null ? null : price - change));
   }
   return quotes;
 }
@@ -169,6 +193,11 @@ const fetchKorea = (symbolIds) =>
   fetchChunks(symbolIds.flatMap((id) => koreaTickers(tickerOf(id))), YAHOO_CHUNK, sparkRequest, parseKoreaSpark);
 
 const yahooSource = { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo, keyOf: (id, yahooOf) => yahooOf(id) };
+
+// TVC:VIX and CBOE:VIX are both ^VIX, so each Yahoo ticker is asked once.
+const indexYahooOf = (symbolId) => indexOf(symbolId).yahoo;
+const fetchIndices = (symbolIds) =>
+  fetchChunks([...new Set(symbolIds.map(indexYahooOf))], YAHOO_CHUNK, sparkRequest, parseIndexSpark);
 
 function binanceUrl(tickers) {
   const query = encodeURIComponent(JSON.stringify(tickers));
@@ -366,6 +395,7 @@ const SOURCES = {
   ],
   eu: [yahooSource],
   kr: [{ label: 'Yahoo', enabled: () => true, fetch: fetchKorea }],
+  index: [{ label: 'Yahoo', enabled: () => true, fetch: fetchIndices, keyOf: indexYahooOf }],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
   perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
   ...EXCHANGE_SOURCES,
@@ -542,6 +572,11 @@ async function resolveUs(ticker) {
   return { id: `${exchange}:${ticker}`, name: meta.shortName ?? meta.longName ?? '' };
 }
 
+// The ticker of an index is its full id, for example TVC:VIX. The list has its name, so Yahoo is not asked.
+async function resolveIndex(symbolId) {
+  return { id: symbolId, name: indexOf(symbolId).name };
+}
+
 // Tries the given Yahoo tickers in order. Without them, takes the first European match of a Yahoo search.
 // Tested: the search lists the main exchange first, for example IFX.DE before IFX.F.
 async function resolveEurope(ticker, yahoo) {
@@ -583,6 +618,7 @@ const RESOLVERS = {
   us: resolveUs,
   eu: resolveEurope,
   kr: resolveKorea,
+  index: resolveIndex,
   ...Object.fromEntries(Object.keys(EXCHANGE_QUOTES).map((market) => [market, resolveOnExchange(market)])),
 };
 

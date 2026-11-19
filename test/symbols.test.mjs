@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   chartUrl,
   europeIdOf,
+  indexOf,
   isChartUrl,
   isCryptoMarket,
   marketOf,
@@ -64,12 +65,35 @@ test('marketOf and tickerOf read a symbol id', () => {
 
 test('marketOf gives Binance perpetual contracts their own market, and null for exchanges with no quotes', () => {
   assert.equal(marketOf('BINANCE:SUIUSDT.P'), 'perp');
-  assert.equal(marketOf('CBOE:VIX'), 'us');
-  for (const id of ['COINBASE:SUIUSD', 'WEEX:SUIUSDT', 'CME:SUI1!', 'TVC:DXY', 'FX:EURUSD', 'HKEX:700']) {
+  assert.equal(marketOf('CBOE:ABCD'), 'us');
+  for (const id of ['COINBASE:SUIUSD', 'WEEX:SUIUSDT', 'CME:SUI1!', 'TVC:GOLD', 'FX:EURUSD', 'HKEX:700']) {
     assert.equal(marketOf(id), null, id);
   }
   assert.deepEqual(parseInput('binance:suiusdt.p'), { ticker: 'SUIUSDT.P', markets: ['perp'] });
   assert.equal(parseInput('WEEX:SUIUSDT'), null);
+});
+
+test('marketOf puts a listed index first, also on a stock exchange', () => {
+  for (const id of ['TVC:VIX', 'CBOE:VIX', 'SP:SPX', 'NASDAQ:NDX', 'KRX:KOSPI', 'XETR:DAX', 'EURONEXT:PX1', 'TVC:US10Y', 'SSE:000001']) {
+    assert.equal(marketOf(id), 'index', id);
+  }
+  assert.deepEqual(indexOf('TVC:VIX'), { yahoo: '^VIX', name: 'CBOE Volatility Index' });
+  assert.deepEqual(indexOf('CBOE:VIX'), indexOf('TVC:VIX'));
+  assert.equal(indexOf('TVC:DXY').yahoo, 'DX-Y.NYB');
+  assert.equal(indexOf('NASDAQ:AAPL'), undefined);
+  // Stocks on the same exchanges keep their markets. TWSE MIS has the Taiwan indices.
+  assert.equal(marketOf('CBOE:ABCD'), 'us');
+  assert.equal(marketOf('XETR:IFX'), 'eu');
+  assert.equal(marketOf('KRX:005930'), 'kr');
+  assert.equal(marketOf('TWSE:IX0001'), 'tw');
+  assert.equal(showsExchange('TVC:VIX'), false);
+});
+
+test('parseInput keeps the full id of an index as its ticker', () => {
+  assert.deepEqual(parseInput('tvc:vix'), { ticker: 'TVC:VIX', markets: ['index'] });
+  assert.deepEqual(parseInput('XETR:DAX'), { ticker: 'XETR:DAX', markets: ['index'] });
+  assert.deepEqual(parseInput('SSE:000001'), { ticker: 'SSE:000001', markets: ['index'] });
+  assert.equal(parseInput('TVC:GOLD'), null);
 });
 
 test('marketOf gives each other crypto exchange a spot market and a perpetual market', () => {

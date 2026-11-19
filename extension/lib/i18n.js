@@ -77,6 +77,7 @@ export const MESSAGES = {
   'market.us': ['美股', 'US stocks'],
   'market.eu': ['歐股', 'European stocks'],
   'market.kr': ['韓股', 'Korean stocks'],
+  'market.index': ['指數', 'Indices'],
   'market.crypto': ['幣安現貨', 'Binance Spot'],
   'market.perp': ['幣安合約', 'Binance Perpetual'],
   'market.spot': ['{name} 現貨', '{name} Spot'],
