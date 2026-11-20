@@ -13,6 +13,7 @@ import {
   parseBinance,
   parseExtendedHours,
   parseFugle,
+  parseIndexSpark,
   parseKoreaSpark,
   parseMis,
   parseYahooSpark,
@@ -98,6 +99,29 @@ test('parseKoreaSpark keeps the suffix with bars and drops the old price of the 
   assert.ok(near(quotes.get('247540'), 75900, -7200, -8.664)); // KOSDAQ, .KQ
   assert.equal(quotes.get('086520').price, 60600);
   assert.equal(quotes.size, 3);
+});
+
+test('parseIndexSpark takes the change from fulldayChange, not from a stale previousClose', () => {
+  // A real response at 11:05 in New York. previousClose of ^TWII was 40092.1, the close of two
+  // sessions before. TWSE MIS gave 38426.89 and a previous close of 40194.91.
+  const quotes = parseIndexSpark(fixture('yahoo-spark-index'));
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  const twii = quotes.get('^TWII');
+  assert.equal(twii.price, 38426.89);
+  assert.ok(near(twii.change, -1768.02));
+  assert.ok(near(twii.changePercent, (-1768.02 / 40194.91) * 100));
+  assert.ok(near(quotes.get('^HSI').change, -453.131));
+  assert.equal(quotes.get('^VIX').price, 25.78);
+  assert.ok(near(quotes.get('^VIX').change, 1.22));
+  assert.ok(near(quotes.get('DX-Y.NYB').change, -0.035));
+  assert.ok(near(quotes.get('^TNX').change, -0.002));
+  assert.equal(quotes.size, 6);
+});
+
+test('parseIndexSpark skips a row without a price, and has no change without fulldayChange', () => {
+  const quotes = parseIndexSpark({ '^GONE': { close: [], previousClose: 10 }, '^NOCHANGE': { fulldayPrice: 5 } });
+  assert.equal(quotes.has('^GONE'), false);
+  assert.deepEqual(quotes.get('^NOCHANGE'), { price: 5, change: null, changePercent: null });
 });
 
 test('parseBinance reads a real response', () => {
@@ -198,6 +222,27 @@ test('fetchQuotes asks Yahoo for both Korean suffixes and returns KRX ids', asyn
   assert.equal(quotes.get('KRX:005930').price, 189900);
   assert.equal(quotes.get('KRX:247540').price, 75900);
   assert.deepEqual(status, [{ market: 'kr', source: 'Yahoo', errors: [] }]);
+});
+
+test('fetchQuotes asks Yahoo once for an index with two ids, and never asks Alpaca', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    asked.push(new URL(url).hostname);
+    const symbols = new URL(url).searchParams.get('symbols').split(',');
+    assert.deepEqual(symbols, ['^VIX', '^GSPC', '^GDAXI']);
+    return jsonResponse(fixture('yahoo-spark-index'));
+  };
+  // CBOE:VIX was a US stock before. A US stock with an Alpaca key goes to Alpaca first.
+  const keys = { alpacaId: 'id', alpacaSecret: 'secret' };
+  const { quotes, status } = await fetchQuotes(['TVC:VIX', 'CBOE:VIX', 'SP:SPX', 'XETR:DAX'], keys);
+  assert.deepEqual(asked, ['query1.finance.yahoo.com']);
+  assert.equal(quotes.get('TVC:VIX').price, 25.78);
+  assert.equal(quotes.get('CBOE:VIX').price, 25.78);
+  assert.equal(quotes.get('SP:SPX').price, 7307.71);
+  assert.equal(quotes.has('XETR:DAX'), false); // ^GDAXI is not in the fixture.
+  assert.deepEqual(status, [{ market: 'index', source: 'Yahoo', errors: [] }]);
+  assert.equal(hasExtendedHours('CBOE:VIX'), false);
+  assert.equal(hasExtendedHours('NASDAQ:NDX'), false);
 });
 
 test('fetchQuotes uses the keyed source first if the user has a key', async () => {
@@ -351,6 +396,14 @@ const usMeta = (exchangeName, shortName) =>
 test('resolveSymbol maps the Yahoo exchange to the TradingView exchange', async () => {
   globalThis.fetch = async () => usMeta('PCX', 'SPDR');
   assert.deepEqual(await resolveSymbol('SPY'), { id: 'AMEX:SPY', name: 'SPDR' });
+});
+
+test('resolveSymbol finds an index in the list without asking Yahoo', async () => {
+  globalThis.fetch = async () => {
+    throw new Error('no request expected');
+  };
+  assert.deepEqual(await resolveSymbol('xetr:dax'), { id: 'XETR:DAX', name: 'DAX' });
+  assert.deepEqual(await resolveSymbol('TVC:VIX'), { id: 'TVC:VIX', name: 'CBOE Volatility Index' });
 });
 
 test('resolveSymbol tries the US market if Binance has no such pair', async () => {

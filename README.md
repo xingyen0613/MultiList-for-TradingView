@@ -18,7 +18,7 @@ The interface is in English and Traditional Chinese. It follows your browser lan
 - Unlimited groups. A symbol can be in many groups, or in no group.
 - Search by code or by company name, in English or Chinese. The results come from TradingView search, with all exchanges, spot pairs, perpetual contracts and futures.
 - Import your TradingView watchlists with one click. Each list becomes a tab, and each section becomes a group.
-- Prices for Taiwan stocks (TWSE, TPEx), US stocks, European stocks, Korean stocks (KOSPI, KOSDAQ), crypto spot pairs and perpetual contracts on Binance, Bybit, OKX, Bitget, Gate and MEXC, and KuCoin spot pairs. You can also add other symbols, for example other exchanges, futures, indices or forex. They show no price, but a click still opens the chart.
+- Prices for Taiwan stocks (TWSE, TPEx), US stocks, European stocks, Korean stocks (KOSPI, KOSDAQ), common indices such as VIX, crypto spot pairs and perpetual contracts on Binance, Bybit, OKX, Bitget, Gate and MEXC, and KuCoin spot pairs. You can also add other symbols, for example other exchanges, futures or forex. They show no price, but a click still opens the chart.
 - The **All** tab shows every group. A new install also has one custom tab, **Tab 1**. Add more tabs with the **+** at the right end of the tab bar. You decide which groups go in each tab. A custom tab shows only its own groups, and these groups also show on **All**. Symbols that are not in a group show above the groups. On **All**, the symbols of a custom tab that are not in a group show under the name of that tab.
 - Click the pencil at the right end of the tab bar to rename the current tab. Clear the name of **All** to go back to the default.
 - Click the × on a custom tab to delete it. The × shows on the current tab, and on another tab when you point at it. A popup asks before the delete. The groups of the tab, and its symbols that are not in a group, stay on **All**.
@@ -57,7 +57,7 @@ The extension needs Chrome 117 or later.
 
 The first time you open the panel, it offers Google sign-in once. Later, click the cloud at the top right (it shows only when you are not signed in), or **Sign in with Google** in the **⋯** menu. The **⋯** menu also has the TradingView import, export and import, API keys, colors, anonymous sharing, sign-out and account deletion.
 
-The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930`, `BINANCE:SUIUSDT.P`, `BYBIT:MNTUSDT` or `OKX:SUIUSDT.P`. A plain crypto pair such as `MNTUSDT` is looked up on Binance first, then on Bybit, OKX, Bitget, Gate, KuCoin and MEXC, in that order. The first match is used. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
+The search needs an open TradingView tab in Chrome. Without one, type full codes and press Enter. You can type several at once, for example `2330 AAPL IFX BTCUSDT`. Numeric codes are looked up as Taiwan stocks. Other tickers are looked up as US stocks first, then as European stocks. You can also type the full form, for example `NYSE:TSM`, `XETR:IFX`, `KRX:005930`, `TVC:VIX`, `BINANCE:SUIUSDT.P`, `BYBIT:MNTUSDT` or `OKX:SUIUSDT.P`. A plain crypto pair such as `MNTUSDT` is looked up on Binance first, then on Bybit, OKX, Bitget, Gate, KuCoin and MEXC, in that order. The first match is used. Type Korean stocks in the full form, because a numeric code is looked up as a Taiwan stock.
 
 For a European stock that has the same ticker as a US stock, type the exchange. Use the TradingView form, for example `XETR:SAP`, or the Yahoo form, for example `SAP.DE`.
 
@@ -78,6 +78,17 @@ European stocks have prices on these exchanges:
 | Vienna | `VIE:OMV` | `OMV.VI` |
 | Warsaw | `GPW:PKO` | `PKO.WA` |
 
+These indices have prices. Pick them from the search, or type the TradingView form, for example `TVC:VIX`, `SP:SPX` or `TVC:US10Y`.
+
+| Group | Indices |
+| --- | --- |
+| Volatility | VIX, VIX9D, VIX3M, VVIX, VXN (Nasdaq 100), OVX (crude oil), GVZ (gold), MOVE (US bonds) |
+| United States | S&P 500, Nasdaq 100, Nasdaq Composite, Dow Jones, Russell 2000, PHLX Semiconductor (SOX), US Dollar Index (DXY), 5-, 10- and 30-year Treasury yields |
+| Asia | TAIEX, TPEx index, Nikkei 225, KOSPI, Hang Seng, SSE Composite, NIFTY 50 |
+| Europe | DAX, FTSE 100, EURO STOXX 50, CAC 40 |
+
+Some index prices are delayed. In a test on 2026-11-20, VIX, Russell 2000 and the Treasury yields were about 15 minutes behind. TAIEX as `TWSE:IX0001` and the TPEx index as `TPEX:IX0043` get their prices from TWSE MIS, like Taiwan stocks. Prices show two decimals, so a Treasury yield change below 0.005 shows as 0.00.
+
 ## Import TradingView watchlists
 
 1. Open TradingView in Chrome and sign in.
@@ -97,6 +108,7 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 | US pre-market and after-hours | Not available | Yahoo Finance |
 | European stocks | Not available | Yahoo Finance |
 | Korean stocks | Not available | Yahoo Finance |
+| Indices | Not available | Yahoo Finance |
 | Binance spot | Not needed | Binance |
 | Binance perpetual contracts | Not needed | Binance futures API |
 | Bybit spot and perpetual contracts | Not needed | Bybit API |
@@ -108,7 +120,7 @@ Chrome sync allows 8 KB for each group (about 150 symbols) and 100 KB in total. 
 
 Add keys under **Quote API keys…** in the **⋯** menu at the top right. Keys stay on your computer and do not sync. If a keyed source fails, the panel uses the source without a key and shows the error.
 
-TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. A code that you type, and an imported symbol, use Yahoo or TWSE MIS to find the exchange and the name. A European search result uses Yahoo to find its Yahoo ticker.
+TWSE MIS and Yahoo Finance are not documented public APIs. They can change or block requests at any time, and the Yahoo terms restrict automated access. Add keys if you want documented sources. A code that you type, and an imported symbol, use Yahoo or TWSE MIS to find the exchange and the name. An index takes its name from a list in the extension. A European search result uses Yahoo to find its Yahoo ticker.
 
 The search and the import use TradingView. See the limits below.
 
