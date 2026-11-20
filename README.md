@@ -87,7 +87,7 @@ These indices have prices. Pick them from the search, or type the TradingView fo
 | Asia | TAIEX, TPEx index, Nikkei 225, KOSPI, Hang Seng, SSE Composite, NIFTY 50 |
 | Europe | DAX, FTSE 100, EURO STOXX 50, CAC 40 |
 
-Some index prices are delayed. In a test on 2026-11-20, VIX, Russell 2000 and the Treasury yields were about 15 minutes behind. TAIEX as `TWSE:IX0001` and the TPEx index as `TPEX:IX0043` get their prices from TWSE MIS, like Taiwan stocks. Prices show two decimals, so a Treasury yield change below 0.005 shows as 0.00.
+Some index prices are delayed. In tests on 2026-11-20, VIX, Russell 2000 and the Treasury yields were about 15 minutes behind, and `INDEX:TAIEX` was about 20 minutes behind during the Taiwan session. TAIEX as `TWSE:IX0001` and the TPEx index as `TPEX:IX0043` get their prices from TWSE MIS, like Taiwan stocks. During the Taiwan session, `TWSE:IX0001` was at most 2 minutes behind, so use it for TAIEX. Prices show two decimals, so a Treasury yield change below 0.005 shows as 0.00.
 
 ## Import TradingView watchlists
 
