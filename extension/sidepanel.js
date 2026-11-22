@@ -589,11 +589,16 @@ async function addSymbols(groupId, text) {
   state.resolving = true;
   const errors = [];
   const added = [];
-  for (const token of text.split(/[\s,，、]+/).filter(Boolean)) {
+  const tokens = text.split(/[\s,，、]+/).filter(Boolean);
+  for (const token of tokens) {
     try {
       added.push(await resolveSymbol(token));
     } catch (error) {
-      errors.push(error.message);
+      // A name such as ORACLE is not a code. When Enter comes before the search results,
+      // the first search result is added, as Enter does when the results show.
+      const result = tokens.length === 1 && !token.includes(':') ? await firstSearchResult(token) : null;
+      if (result) added.push(await symbolFromResult(result));
+      else errors.push(error.message);
     }
   }
   state.resolving = false;
@@ -610,15 +615,20 @@ async function addSymbols(groupId, text) {
 
 // A search result keeps the TradingView name. A European stock also needs its Yahoo ticker
 // for quotes, because EURONEXT:MC can be MC.PA or MC.AS.
-async function addSearchResult(groupId, result) {
-  if (state.resolving) return;
+async function symbolFromResult(result) {
   const symbol = { id: result.id, name: result.name };
   if (marketOf(result.id) === 'eu') {
-    state.resolving = true;
     const resolved = await resolveSymbol(result.id).catch(() => null);
-    state.resolving = false;
     if (resolved?.yahoo) symbol.yahoo = resolved.yahoo;
   }
+  return symbol;
+}
+
+async function addSearchResult(groupId, result) {
+  if (state.resolving) return;
+  state.resolving = true;
+  const symbol = await symbolFromResult(result);
+  state.resolving = false;
   const group = groupById(groupId);
   if (!group) return;
   state.addError = addSymbol(group, symbol) ? '' : t('symbol.exists', { ticker: result.ticker, group: groupTitle(group) });
@@ -664,6 +674,15 @@ function onSearchInput(text) {
 // The page functions in chart-page.js send a timeout as 'timeout'.
 const pageError = (error) => (error === 'timeout' ? t('error.timeout') : error);
 
+const searchInTradingView = (text) =>
+  runInTradingView(searchSymbolsInPage, [text, state.search.type, getLanguage() === 'en' ? 'en' : 'zh_TW']);
+
+// Without a TradingView tab, or when the search fails, there is no result.
+async function firstSearchResult(text) {
+  const answer = await searchInTradingView(text);
+  return answer?.json ? (parseSearch(answer.json)[0] ?? null) : null;
+}
+
 // Only the answer to the last search is shown, because an older answer can come later.
 async function runSearch() {
   clearTimeout(searchTimer);
@@ -674,7 +693,7 @@ async function runSearch() {
     paintSearch();
     return;
   }
-  const answer = await runInTradingView(searchSymbolsInPage, [text, state.search.type, getLanguage() === 'en' ? 'en' : 'zh_TW']);
+  const answer = await searchInTradingView(text);
   if (run !== searchRun || state.addingTo === null || text !== state.search.text.trim()) return;
   let results = [];
   let message = '';
