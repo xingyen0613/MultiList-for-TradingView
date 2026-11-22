@@ -77,6 +77,7 @@ export const MESSAGES = {
   'market.us': ['美股', 'US stocks'],
   'market.eu': ['歐股', 'European stocks'],
   'market.kr': ['韓股', 'Korean stocks'],
+  'market.jp': ['日股', 'Japanese stocks'],
   'market.index': ['指數', 'Indices'],
   'market.crypto': ['幣安現貨', 'Binance Spot'],
   'market.perp': ['幣安合約', 'Binance Perpetual'],
@@ -164,8 +165,8 @@ export const MESSAGES = {
 
   // Looking up a typed symbol.
   'resolve.unsupported': [
-    '不支援「{raw}」，請用台股、美股、歐股、韓股或加密貨幣代碼',
-    '“{raw}” is not supported. Use a Taiwan, US, European, Korean or crypto symbol.',
+    '不支援「{raw}」，請用台股、美股、歐股、韓股、日股或加密貨幣代碼',
+    '“{raw}” is not supported. Use a Taiwan, US, European, Korean, Japanese or crypto symbol.',
   ],
   'resolve.failed': ['查詢 {ticker} 失敗（{message}）', 'Could not look up {ticker} ({message})'],
   'resolve.notFound': ['找不到 {ticker}', '{ticker} not found'],
