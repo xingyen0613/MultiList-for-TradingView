@@ -3,6 +3,7 @@ import {
   EXCHANGE_MARKETS,
   europeIdOf,
   indexOf,
+  japanYahooTicker,
   marketOf,
   parseInput,
   splitPair,
@@ -191,6 +192,11 @@ const fetchYahoo = (symbolIds, keys, yahooOf) =>
 
 const fetchKorea = (symbolIds) =>
   fetchChunks(symbolIds.flatMap((id) => koreaTickers(tickerOf(id))), YAHOO_CHUNK, sparkRequest, parseKoreaSpark);
+
+// A Tokyo stock has one Yahoo ticker, so the keys stay in the Yahoo form, for example 7203.T.
+const japanYahooOf = (symbolId) => japanYahooTicker(tickerOf(symbolId));
+const fetchJapan = (symbolIds) =>
+  fetchChunks(symbolIds.map(japanYahooOf), YAHOO_CHUNK, sparkRequest, parseYahooSpark);
 
 const yahooSource = { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo, keyOf: (id, yahooOf) => yahooOf(id) };
 
@@ -395,6 +401,7 @@ const SOURCES = {
   ],
   eu: [yahooSource],
   kr: [{ label: 'Yahoo', enabled: () => true, fetch: fetchKorea }],
+  jp: [{ label: 'Yahoo', enabled: () => true, fetch: fetchJapan, keyOf: japanYahooOf }],
   index: [{ label: 'Yahoo', enabled: () => true, fetch: fetchIndices, keyOf: indexYahooOf }],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
   perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
@@ -605,6 +612,11 @@ async function resolveKorea(ticker) {
   return meta ? { id: `KRX:${ticker}`, name: cleanName(meta.longName ?? meta.shortName) } : null;
 }
 
+async function resolveJapan(ticker) {
+  const meta = await yahooMeta(japanYahooTicker(ticker));
+  return meta ? { id: `TSE:${ticker}`, name: cleanName(meta.longName ?? meta.shortName) } : null;
+}
+
 // Finds a pair on another crypto exchange. A perpetual contract keeps .P in its id.
 const resolveOnExchange = (market) => async (ticker) => {
   const quote = await exchangeQuote(market, ticker);
@@ -618,6 +630,7 @@ const RESOLVERS = {
   us: resolveUs,
   eu: resolveEurope,
   kr: resolveKorea,
+  jp: resolveJapan,
   index: resolveIndex,
   ...Object.fromEntries(Object.keys(EXCHANGE_QUOTES).map((market) => [market, resolveOnExchange(market)])),
 };

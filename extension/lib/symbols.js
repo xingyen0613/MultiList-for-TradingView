@@ -125,6 +125,7 @@ export function marketOf(symbolId) {
   if (US_EXCHANGES.has(exchange)) return 'us';
   if (EUROPE_EXCHANGES.has(exchange)) return 'eu';
   if (exchange === 'KRX') return 'kr';
+  if (exchange === 'TSE') return 'jp';
   if (exchange === 'BINANCE') return perp ? 'perp' : 'crypto';
   return exchangeMarketOf(exchange, ticker, perp);
 }
@@ -155,6 +156,12 @@ function europeTickersOf(exchange, ticker) {
     .map(([suffix]) => `${base}.${suffix}`);
 }
 
+// Tokyo stocks are TSE:7203 on TradingView and 7203.T on Yahoo. A code has 4 characters. Newer codes
+// can have a letter in the second or fourth place, for example 130A. Tested on 2026-11-22 with 7203,
+// 130A and the ETF 1306: the TradingView search has TSE:7203 and TSE:130A, and Yahoo has a price for each.
+const JAPAN_YAHOO_FORM = /^(\d[0-9A-Z]\d[0-9A-Z])\.T$/;
+export const japanYahooTicker = (ticker) => `${ticker}.T`;
+
 export function tickerOf(symbolId) {
   return symbolId.split(':')[1];
 }
@@ -178,6 +185,8 @@ export function parseInput(raw) {
     return market ? { ticker, markets: [market] } : null;
   }
 
+  const japanForm = text.match(JAPAN_YAHOO_FORM);
+  if (japanForm) return { ticker: japanForm[1], markets: ['jp'] };
   const yahooForm = text.match(/^[A-Z0-9][A-Z0-9-]*\.([A-Z]{1,2})$/);
   if (yahooForm && EUROPE[yahooForm[1]]) return { ticker: text, markets: ['eu'], yahoo: [text] };
   if (/^\d{4,6}[A-Z]?$/.test(text)) return { ticker: text, markets: ['tw'] };

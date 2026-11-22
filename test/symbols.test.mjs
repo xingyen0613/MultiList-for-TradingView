@@ -27,6 +27,7 @@ test('parseInput routes each input form to the right markets', () => {
   assert.deepEqual(parseInput('NYSE:TSM'), { ticker: 'TSM', markets: ['us'] });
   assert.deepEqual(parseInput('BINANCE:ETHUSDT'), { ticker: 'ETHUSDT', markets: ['crypto'] });
   assert.deepEqual(parseInput('krx:005930'), { ticker: '005930', markets: ['kr'] });
+  assert.deepEqual(parseInput('tse:7203'), { ticker: '7203', markets: ['jp'] });
 });
 
 test('parseInput reads the European forms', () => {
@@ -60,6 +61,8 @@ test('marketOf and tickerOf read a symbol id', () => {
   assert.equal(marketOf('EURONEXT:ASML'), 'eu');
   assert.equal(marketOf('OMXSTO:SIVE'), 'eu');
   assert.equal(marketOf('KRX:005930'), 'kr');
+  assert.equal(marketOf('TSE:7203'), 'jp');
+  assert.equal(marketOf('TSE:130A'), 'jp');
   assert.equal(tickerOf('NYSE:BRK.B'), 'BRK.B');
 });
 
@@ -87,6 +90,14 @@ test('marketOf puts a listed index first, also on a stock exchange', () => {
   assert.equal(marketOf('KRX:005930'), 'kr');
   assert.equal(marketOf('TWSE:IX0001'), 'tw');
   assert.equal(showsExchange('TVC:VIX'), false);
+});
+
+test('parseInput reads the Yahoo form of a Tokyo stock, and a numeric code stays a Taiwan stock', () => {
+  assert.deepEqual(parseInput('7203.T'), { ticker: '7203', markets: ['jp'] });
+  assert.deepEqual(parseInput('130a.t'), { ticker: '130A', markets: ['jp'] });
+  assert.deepEqual(parseInput('TSE:130A'), { ticker: '130A', markets: ['jp'] });
+  assert.deepEqual(parseInput('7203'), { ticker: '7203', markets: ['tw'] });
+  assert.equal(showsExchange('TSE:7203'), false);
 });
 
 test('parseInput keeps the full id of an index as its ticker', () => {
@@ -119,7 +130,7 @@ test('marketOf gives each other crypto exchange a spot market and a perpetual ma
 
 test('isCryptoMarket and showsExchange tell Binance apart from the other crypto exchanges', () => {
   for (const market of ['crypto', 'perp', 'bybit', 'okx-perp', 'kucoin']) assert.equal(isCryptoMarket(market), true, market);
-  for (const market of ['tw', 'us', 'eu', 'kr', null]) assert.equal(isCryptoMarket(market), false, market);
+  for (const market of ['tw', 'us', 'eu', 'kr', 'jp', null]) assert.equal(isCryptoMarket(market), false, market);
   for (const id of ['BINANCE:SUIUSDT', 'BINANCE:SUIUSDT.P', 'NASDAQ:AAPL', 'TWSE:2330']) assert.equal(showsExchange(id), false, id);
   for (const id of ['BYBIT:SUIUSDT', 'OKX:SUIUSDT.P', 'COINBASE:SUIUSD', 'CME:SUI1!']) assert.equal(showsExchange(id), true, id);
 });

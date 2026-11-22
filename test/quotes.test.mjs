@@ -224,6 +224,25 @@ test('fetchQuotes asks Yahoo for both Korean suffixes and returns KRX ids', asyn
   assert.deepEqual(status, [{ market: 'kr', source: 'Yahoo', errors: [] }]);
 });
 
+test('fetchQuotes asks Yahoo for Tokyo stocks with .T and returns TSE ids', async () => {
+  let asked;
+  globalThis.fetch = async (url) => {
+    asked = new URL(url).searchParams.get('symbols').split(',');
+    return jsonResponse(fixture('yahoo-spark-japan'));
+  };
+  const { quotes, status } = await fetchQuotes(['TSE:7203', 'TSE:130A', 'TSE:1306'], {});
+  assert.deepEqual(asked, ['7203.T', '130A.T', '1306.T']);
+  // A real response after the close of 2026-11-20. The change is from the close of 2026-11-19.
+  const rounded = (id) => {
+    const { price, change, changePercent } = quotes.get(id);
+    return [price, Number(change.toFixed(2)), Number(changePercent.toFixed(2))];
+  };
+  assert.deepEqual(rounded('TSE:7203'), [3312, -66, -1.95]);
+  assert.deepEqual(rounded('TSE:130A'), [297, -68, -18.63]);
+  assert.deepEqual(rounded('TSE:1306'), [386.2, -16, -3.98]);
+  assert.deepEqual(status, [{ market: 'jp', source: 'Yahoo', errors: [] }]);
+});
+
 test('fetchQuotes asks Yahoo once for an index with two ids, and never asks Alpaca', async () => {
   const asked = [];
   globalThis.fetch = async (url) => {
@@ -508,6 +527,22 @@ test('resolveSymbol takes the Korean suffix with the latest trade', async () => 
   await assert.rejects(resolveSymbol('KRX:999999'), /找不到 999999/);
 });
 
+test('resolveSymbol finds a Tokyo stock from the TradingView or the Yahoo form', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const ticker = decodeURIComponent(new URL(url).pathname.split('/').pop());
+    asked.push(ticker);
+    if (ticker !== '7203.T') return jsonResponse({ chart: { result: null, error: { code: 'Not Found' } } }, 404);
+    const meta = { symbol: '7203.T', exchangeName: 'JPX', regularMarketPrice: 3312, shortName: 'TOYOTA MOTOR CORP', longName: 'Toyota Motor Corporation' };
+    return jsonResponse({ chart: { result: [{ meta }] } });
+  };
+  const toyota = { id: 'TSE:7203', name: 'Toyota Motor Corporation' };
+  assert.deepEqual(await resolveSymbol('TSE:7203'), toyota);
+  assert.deepEqual(await resolveSymbol('7203.t'), toyota);
+  assert.deepEqual(asked, ['7203.T', '7203.T']);
+  await assert.rejects(resolveSymbol('TSE:9999'), /找不到 9999/);
+});
+
 test('resolveSymbol explains each failure', async () => {
   // Tested: Yahoo search answers an unknown ticker with an empty list.
   globalThis.fetch = async (url) =>
@@ -526,7 +561,7 @@ test('resolveSymbol explains each failure in English when the panel is in Englis
     globalThis.fetch = async (url) =>
       new URL(url).pathname.includes('/search') ? jsonResponse({ quotes: [] }) : jsonResponse({}, 404);
     await assert.rejects(resolveSymbol('ZZZZZ'), { message: 'ZZZZZ not found' });
-    await assert.rejects(resolveSymbol('台積電'), { message: '“台積電” is not supported. Use a Taiwan, US, European, Korean or crypto symbol.' });
+    await assert.rejects(resolveSymbol('台積電'), { message: '“台積電” is not supported. Use a Taiwan, US, European, Korean, Japanese or crypto symbol.' });
     globalThis.fetch = async () => jsonResponse({}, 429);
     await assert.rejects(resolveSymbol('AAPL'), { message: 'Could not look up AAPL (HTTP 429)' });
   } finally {
