@@ -33,6 +33,7 @@ MultiList for TradingView（以下稱「本插件」）是非官方工具，與 
 - Gate
 - KuCoin
 - MEXC
+- 新加坡交易所 SGX（api.sgx.com）
 - Fugle
 - Alpaca
 

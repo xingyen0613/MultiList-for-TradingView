@@ -21,7 +21,8 @@
     "https://api.mexc.com/*",
     "https://contract.mexc.com/*",
     "https://api.fugle.tw/*",
-    "https://data.alpaca.markets/*"
+    "https://data.alpaca.markets/*",
+    "https://api.sgx.com/*"
   ],
   "background": {
     "service_worker": "background.js",

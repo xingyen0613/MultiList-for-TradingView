@@ -16,6 +16,7 @@ import {
   parseIndexSpark,
   parseKoreaSpark,
   parseMis,
+  parseSgx,
   parseYahooSpark,
   resolveSymbol,
   takeBatch,
@@ -241,6 +242,61 @@ test('fetchQuotes asks Yahoo for Tokyo stocks with .T and returns TSE ids', asyn
   assert.deepEqual(rounded('TSE:130A'), [297, -68, -18.63]);
   assert.deepEqual(rounded('TSE:1306'), [386.2, -16, -3.98]);
   assert.deepEqual(status, [{ market: 'jp', source: 'Yahoo', errors: [] }]);
+});
+
+test('fetchQuotes asks Yahoo once for each forex pair and CME FX futures, and SGX for TWD futures', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const { hostname, pathname, searchParams } = new URL(url);
+    if (hostname === 'api.sgx.com') {
+      asked.push(pathname.split('/').pop());
+      return jsonResponse(fixture('sgx-twd'));
+    }
+    asked.push(...searchParams.get('symbols').split(','));
+    return jsonResponse(fixture('yahoo-spark-forex'));
+  };
+  const ids = ['FX:USDTWD', 'FX_IDC:USDTWD', 'OANDA:EURUSD', 'CME:6E1!', 'SGX:TWD1!'];
+  const { quotes, status } = await fetchQuotes(ids, { alpacaId: 'id', alpacaSecret: 'secret' });
+  assert.deepEqual(asked.sort(), ['6E=F', 'EURUSD=X', 'TWD', 'USDTWD=X']);
+  // Real responses on 2026-11-23 during the Asian session.
+  const rounded = (id) => {
+    const { price, change, changePercent } = quotes.get(id);
+    return [price, Number(change.toFixed(4)), Number(changePercent.toFixed(4))];
+  };
+  assert.deepEqual(rounded('FX:USDTWD'), [32.872, -0.086, -0.2609]);
+  assert.deepEqual(rounded('FX_IDC:USDTWD'), [32.872, -0.086, -0.2609]);
+  assert.deepEqual(rounded('OANDA:EURUSD'), [1.1001, 0.0027, 0.2460]);
+  assert.deepEqual(rounded('CME:6E1!'), [1.1, 0.002, 0.1821]);
+  assert.deepEqual(rounded('SGX:TWD1!'), [30.425, 0.005, 0.0164]);
+  assert.deepEqual(
+    status.sort((a, b) => a.market.localeCompare(b.market)),
+    [
+      { market: 'cme', source: 'Yahoo', errors: [] },
+      { market: 'fx', source: 'Yahoo', errors: [] },
+      { market: 'sgx', source: 'SGX', errors: [] },
+    ],
+  );
+});
+
+test('parseSgx takes the front month, the row with a trade, and else the settlement', () => {
+  const row = (fields) => ({ 'delivery-month': '2026-12', 'last-traded-price-adj': null, 'change-adj': null, ...fields });
+  // The later month comes first, and the T+1 row has the newer trade.
+  const json = {
+    data: [
+      row({ 'delivery-month': '2027-01', 'last-traded-price-adj': 30.5, 'change-adj': 0.1 }),
+      row({ 'last-traded-price-adj': 30.4, 'change-adj': -0.02, 'last-update-time': '2026-11-23 14:15:00.0' }),
+      row({ 'last-traded-price-adj': 30.41, 'change-adj': -0.01, 'last-update-time': '2026-11-23 19:30:00.0' }),
+    ],
+  };
+  const quote = parseSgx(json);
+  assert.equal(quote.price, 30.41);
+  assert.equal(Number(quote.change.toFixed(4)), -0.01);
+  assert.deepEqual(
+    parseSgx({ data: [row({ 'preliminary-settlement-price-adj': 30.42 }), row({})] }),
+    { price: 30.42, change: null, changePercent: null },
+  );
+  assert.equal(parseSgx({ data: [row({})] }), null);
+  assert.equal(parseSgx({ data: [] }), null);
 });
 
 test('fetchQuotes asks Yahoo once for an index with two ids, and never asks Alpaca', async () => {
@@ -541,6 +597,21 @@ test('resolveSymbol finds a Tokyo stock from the TradingView or the Yahoo form',
   assert.deepEqual(await resolveSymbol('7203.t'), toyota);
   assert.deepEqual(asked, ['7203.T', '7203.T']);
   await assert.rejects(resolveSymbol('TSE:9999'), /找不到 9999/);
+});
+
+test('resolveSymbol keeps the full id of forex and futures, and asks Yahoo only for forex', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const ticker = decodeURIComponent(new URL(url).pathname.split('/').pop());
+    asked.push(ticker);
+    if (ticker !== 'USDTWD=X') return jsonResponse({ chart: { result: null, error: { code: 'Not Found' } } }, 404);
+    return jsonResponse({ chart: { result: [{ meta: { symbol: 'TWD=X', regularMarketPrice: 32.872, shortName: 'USD/TWD' } }] } });
+  };
+  assert.deepEqual(await resolveSymbol('fx_idc:usdtwd'), { id: 'FX_IDC:USDTWD', name: 'USD/TWD' });
+  assert.deepEqual(await resolveSymbol('SGX:TWD1!'), { id: 'SGX:TWD1!', name: 'TWD/USD (Full-Sized) FX Futures' });
+  assert.deepEqual(await resolveSymbol('CME:6J1!'), { id: 'CME:6J1!', name: 'Japanese Yen Futures' });
+  await assert.rejects(resolveSymbol('FX:TWDVND'), /找不到 FX:TWDVND/);
+  assert.deepEqual(asked, ['USDTWD=X', 'TWDVND=X']);
 });
 
 test('resolveSymbol explains each failure', async () => {

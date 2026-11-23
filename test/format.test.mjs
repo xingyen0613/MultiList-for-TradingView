@@ -24,6 +24,16 @@ test('formatChange and formatPercent show the sign', () => {
   assert.equal(formatPercent(0), '0.00%');
 });
 
+test('formats show up to the given decimals for forex, and at least two', () => {
+  assert.equal(formatPrice(1.1005, 4), '1.1005');
+  assert.equal(formatPrice(30.425, 4), '30.425');
+  assert.equal(formatPrice(158.936, 4), '158.936');
+  assert.equal(formatPrice(1.1, 4), '1.10');
+  assert.equal(formatChange(0.004999999999999005, 30.425, 4), '+0.005');
+  assert.equal(formatChange(-0.086, 32.872, 4), '−0.086');
+  assert.equal(formatPrice(0.006302, 4), '0.006302');
+});
+
 test('formatChange takes its precision from the price', () => {
   assert.equal(formatChange(-0.494, 343.68), '−0.49');
   assert.equal(formatChange(-0.00000123, 0.00001234), '−0.00000123');

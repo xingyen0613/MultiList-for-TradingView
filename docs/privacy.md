@@ -33,6 +33,7 @@ Quotes come from:
 - Gate
 - KuCoin
 - MEXC
+- SGX (api.sgx.com)
 - Fugle
 - Alpaca
 
