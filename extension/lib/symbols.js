@@ -75,6 +75,45 @@ const EUROPE = {
 };
 const EUROPE_EXCHANGES = new Set(Object.values(EUROPE).map((item) => item.exchange));
 
+// Forex pairs are two of these currencies, for example FX:USDTWD or OANDA:EURUSD. Many brokers on TradingView
+// have the same pair, and all get the Yahoo spot rate, for example USDTWD=X. Tested on 2026-11-23: Yahoo has
+// USDxxx=X for each currency, and also crosses such as EURTWD=X. Metals such as XAUUSD and crypto pairs such as
+// BTCUSD are not forex here.
+const CURRENCIES = new Set(
+  ('USD EUR JPY GBP AUD NZD CAD CHF CNY CNH HKD TWD KRW SGD INR THB MYR IDR PHP VND ' +
+    'SEK NOK DKK PLN CZK HUF TRY ZAR MXN BRL RUB ILS SAR AED').split(' '),
+);
+function isForexPair(ticker) {
+  const [, base, quote] = ticker.match(/^([A-Z]{3})([A-Z]{3})$/) ?? [];
+  return base !== quote && CURRENCIES.has(base) && CURRENCIES.has(quote);
+}
+export const forexYahooTicker = (ticker) => `${ticker}=X`;
+
+// FX futures by the root of the continuous contract, for example CME:6E1!, with the TradingView names.
+// Yahoo has the CME front month as 6E=F. SGX has an API with all months of TWD. Tested on 2026-11-23:
+// the TradingView search has each id, and the source has a price for each.
+const CME_FUTURES = {
+  '6E': 'Euro FX Futures',
+  '6J': 'Japanese Yen Futures',
+  '6B': 'British Pound Futures',
+  '6A': 'Australian Dollar Futures',
+  '6C': 'Canadian Dollar Futures',
+  '6S': 'Swiss Franc Futures',
+  '6N': 'New Zealand Dollar Futures',
+};
+const SGX_FUTURES = { TWD: 'TWD/USD (Full-Sized) FX Futures' };
+const FUTURES = { CME: CME_FUTURES, SGX: SGX_FUTURES };
+
+// 6E1! gives 6E. Returns null for a dated contract such as 6EZ2026, or for the second month 6E2!.
+export const futuresRoot = (ticker) => ticker.match(/^([A-Z0-9]+)1!$/)?.[1] ?? null;
+export const cmeYahooTicker = (ticker) => `${futuresRoot(ticker)}=F`;
+
+// The name of a listed futures contract, or undefined.
+export function futuresName(symbolId) {
+  const [exchange, ticker = ''] = symbolId.split(':');
+  return FUTURES[exchange]?.[futuresRoot(ticker)];
+}
+
 // Quote currencies of crypto pairs, longest first where one ends another, so BTCUSDT is not BTCU and SDT.
 const QUOTE_CURRENCIES = ['FDUSD', 'USDT', 'USDC', 'USDE', 'USD1', 'USD', 'DAI', 'BTC', 'ETH', 'BNB', 'EUR', 'TRY', 'BRL'];
 
@@ -127,8 +166,14 @@ export function marketOf(symbolId) {
   if (exchange === 'KRX') return 'kr';
   if (exchange === 'TSE') return 'jp';
   if (exchange === 'BINANCE') return perp ? 'perp' : 'crypto';
+  if (futuresName(symbolId)) return exchange.toLowerCase();
+  if (!CRYPTO_EXCHANGES[exchange] && isForexPair(ticker)) return 'fx';
   return exchangeMarketOf(exchange, ticker, perp);
 }
+
+// Forex and FX futures move in the third or fourth decimal, for example EURUSD 1.1005 and SGX:TWD1! 30.425.
+const PRECISE_MARKETS = new Set(['fx', 'cme', 'sgx']);
+export const priceDigits = (symbolId) => (PRECISE_MARKETS.has(marketOf(symbolId)) ? 4 : 2);
 
 export const isCryptoMarket = (market) =>
   market === 'crypto' || market === 'perp' || EXCHANGE_MARKETS.some((item) => item.market === market);
@@ -173,13 +218,16 @@ const fromYahooTicker = (ticker) => ticker.replaceAll('-', '.');
 // Returns the ticker and the markets to look it up in, or null if unsupported.
 // A European symbol also gets the Yahoo tickers to try. Without them, the lookup searches all of Europe.
 // An index keeps the full id as its ticker, because VIX alone does not tell TVC:VIX from CBOE:VIX.
+// So do forex and futures, because USDTWD is on many exchanges.
+const FULL_ID_MARKETS = new Set(['index', 'fx', 'cme', 'sgx']);
+
 export function parseInput(raw) {
   const text = raw.trim().toUpperCase();
 
-  const fullForm = text.match(/^([A-Z]+):([A-Z0-9._-]+)$/);
+  const fullForm = text.match(/^([A-Z_]+):([A-Z0-9._!-]+)$/);
   if (fullForm) {
     const [, exchange, ticker] = fullForm;
-    if (INDEX_BY_ID.has(text)) return { ticker: text, markets: ['index'] };
+    if (FULL_ID_MARKETS.has(marketOf(text))) return { ticker: text, markets: [marketOf(text)] };
     if (EUROPE_EXCHANGES.has(exchange)) return { ticker, markets: ['eu'], yahoo: europeTickersOf(exchange, ticker) };
     const market = marketOf(text);
     return market ? { ticker, markets: [market] } : null;

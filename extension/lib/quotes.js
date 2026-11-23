@@ -1,7 +1,11 @@
 import { t } from './i18n.js';
 import {
+  cmeYahooTicker,
   EXCHANGE_MARKETS,
   europeIdOf,
+  forexYahooTicker,
+  futuresName,
+  futuresRoot,
   indexOf,
   japanYahooTicker,
   marketOf,
@@ -108,6 +112,28 @@ export function parseIndexSpark(json) {
   return quotes;
 }
 
+// SGX futures. The answer has two rows for each month: the T session (0) and the T+1 session (1).
+// The front month is the earliest delivery month. The price is the last trade of the row updated last,
+// and the change is from the settlement before, as on SGX. Without a trade, the price is the settlement
+// and has no change. Tested on 2026-11-23: TWDZ26 30.425, +0.005, the same as SGX:TWD1! on TradingView.
+export function parseSgx(json) {
+  const rows = json.data ?? [];
+  const front = rows.map((row) => row['delivery-month']).sort()[0];
+  const months = rows.filter((row) => row['delivery-month'] === front);
+  const [traded] = months
+    .filter((row) => toNumber(row['last-traded-price-adj']) !== null)
+    .sort((a, b) => String(b['last-update-time']).localeCompare(String(a['last-update-time'])));
+  if (traded) {
+    const price = toNumber(traded['last-traded-price-adj']);
+    const change = toNumber(traded['change-adj']);
+    return quoteFromPrevious(price, change === null ? null : price - change);
+  }
+  const settlement = months
+    .map((row) => toNumber(row['daily-settlement-price-adj']) ?? toNumber(row['preliminary-settlement-price-adj']))
+    .find((price) => price !== null);
+  return settlement === undefined ? null : { price: settlement, change: null, changePercent: null };
+}
+
 // TradingView writes KOSPI and KOSDAQ stocks both as KRX:005930. Yahoo writes 005930.KS for KOSPI
 // and 005930.KQ for KOSDAQ, and also answers the wrong suffix with an old price.
 // Tested on 2026-11-09 with 005930 (KOSPI) and 247540 (KOSDAQ).
@@ -204,6 +230,29 @@ const yahooSource = { label: 'Yahoo', enabled: () => true, fetch: fetchYahoo, ke
 const indexYahooOf = (symbolId) => indexOf(symbolId).yahoo;
 const fetchIndices = (symbolIds) =>
   fetchChunks([...new Set(symbolIds.map(indexYahooOf))], YAHOO_CHUNK, sparkRequest, parseIndexSpark);
+
+// Forex and FX futures trade almost all day, so they read fulldayPrice and fulldayChange, like an index.
+// FX:USDTWD and FX_IDC:USDTWD are both USDTWD=X, so each Yahoo ticker is asked once.
+const forexYahooOf = (symbolId) => forexYahooTicker(tickerOf(symbolId));
+const cmeYahooOf = (symbolId) => cmeYahooTicker(tickerOf(symbolId));
+const fetchSpark = (yahooOf) => (symbolIds) =>
+  fetchChunks([...new Set(symbolIds.map(yahooOf))], YAHOO_CHUNK, sparkRequest, parseIndexSpark);
+
+// One request for each contract root. The answer has all months, about 50 KB for TWD.
+const sgxRootOf = (symbolId) => futuresRoot(tickerOf(symbolId));
+const fetchSgx = async (symbolIds) => {
+  const roots = [...new Set(symbolIds.map(sgxRootOf))];
+  const quotes = await Promise.all(
+    roots.map(async (root) =>
+      parseSgx(
+        await fetchJson(
+          `https://api.sgx.com/derivatives/v1.0/contract-code/${encodeURIComponent(root)}?category=futures&session=-1`,
+        ),
+      ),
+    ),
+  );
+  return new Map(roots.map((root, i) => [root, quotes[i]]).filter(([, quote]) => quote));
+};
 
 function binanceUrl(tickers) {
   const query = encodeURIComponent(JSON.stringify(tickers));
@@ -403,6 +452,9 @@ const SOURCES = {
   kr: [{ label: 'Yahoo', enabled: () => true, fetch: fetchKorea }],
   jp: [{ label: 'Yahoo', enabled: () => true, fetch: fetchJapan, keyOf: japanYahooOf }],
   index: [{ label: 'Yahoo', enabled: () => true, fetch: fetchIndices, keyOf: indexYahooOf }],
+  fx: [{ label: 'Yahoo', enabled: () => true, fetch: fetchSpark(forexYahooOf), keyOf: forexYahooOf }],
+  cme: [{ label: 'Yahoo', enabled: () => true, fetch: fetchSpark(cmeYahooOf), keyOf: cmeYahooOf }],
+  sgx: [{ label: 'SGX', enabled: () => true, fetch: fetchSgx, keyOf: sgxRootOf }],
   crypto: [{ label: 'Binance', enabled: () => true, fetch: fetchBinance }],
   perp: [{ label: 'Binance', enabled: () => true, fetch: fetchBinancePerp, keyOf: perpTicker }],
   ...EXCHANGE_SOURCES,
@@ -617,6 +669,18 @@ async function resolveJapan(ticker) {
   return meta ? { id: `TSE:${ticker}`, name: cleanName(meta.longName ?? meta.shortName) } : null;
 }
 
+// The ticker of a forex pair is its full id, for example FX_IDC:USDTWD. The name is USD/TWD.
+async function resolveForex(symbolId) {
+  const ticker = tickerOf(symbolId);
+  const meta = await yahooMeta(forexYahooTicker(ticker));
+  return meta ? { id: symbolId, name: `${ticker.slice(0, 3)}/${ticker.slice(3)}` } : null;
+}
+
+// The ticker of a futures contract is its full id, for example SGX:TWD1!. The list has its name.
+async function resolveFutures(symbolId) {
+  return { id: symbolId, name: futuresName(symbolId) };
+}
+
 // Finds a pair on another crypto exchange. A perpetual contract keeps .P in its id.
 const resolveOnExchange = (market) => async (ticker) => {
   const quote = await exchangeQuote(market, ticker);
@@ -632,6 +696,9 @@ const RESOLVERS = {
   kr: resolveKorea,
   jp: resolveJapan,
   index: resolveIndex,
+  fx: resolveForex,
+  cme: resolveFutures,
+  sgx: resolveFutures,
   ...Object.fromEntries(Object.keys(EXCHANGE_QUOTES).map((market) => [market, resolveOnExchange(market)])),
 };
 

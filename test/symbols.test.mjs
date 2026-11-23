@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   chartUrl,
+  cmeYahooTicker,
   europeIdOf,
+  forexYahooTicker,
+  futuresName,
+  futuresRoot,
   indexOf,
   isChartUrl,
   isCryptoMarket,
   marketOf,
   parseInput,
+  priceDigits,
   showsExchange,
   splitPair,
   tickerOf,
@@ -69,11 +74,42 @@ test('marketOf and tickerOf read a symbol id', () => {
 test('marketOf gives Binance perpetual contracts their own market, and null for exchanges with no quotes', () => {
   assert.equal(marketOf('BINANCE:SUIUSDT.P'), 'perp');
   assert.equal(marketOf('CBOE:ABCD'), 'us');
-  for (const id of ['COINBASE:SUIUSD', 'WEEX:SUIUSDT', 'CME:SUI1!', 'TVC:GOLD', 'FX:EURUSD', 'HKEX:700']) {
+  for (const id of ['COINBASE:SUIUSD', 'WEEX:SUIUSDT', 'CME:SUI1!', 'TVC:GOLD', 'HKEX:700']) {
     assert.equal(marketOf(id), null, id);
   }
   assert.deepEqual(parseInput('binance:suiusdt.p'), { ticker: 'SUIUSDT.P', markets: ['perp'] });
   assert.equal(parseInput('WEEX:SUIUSDT'), null);
+});
+
+test('marketOf gives forex pairs of two listed currencies the fx market, on any non-crypto exchange', () => {
+  for (const id of ['FX:USDTWD', 'FX_IDC:USDTWD', 'OANDA:EURUSD', 'PEPPERSTONE:EURJPY', 'SAXO:EURTWD']) {
+    assert.equal(marketOf(id), 'fx', id);
+  }
+  // Metals, crypto pairs, CFDs and the same currency twice are not forex.
+  for (const id of ['OANDA:XAUUSD', 'CAPITALCOM:BTCUSD', 'PEPPERSTONE:NAS100', 'FX:USDUSD', 'FX:USDTWD.P']) {
+    assert.equal(marketOf(id), null, id);
+  }
+  // A crypto exchange keeps its own market.
+  assert.equal(marketOf('BYBIT:EURUSD'), 'bybit');
+  assert.deepEqual(parseInput('fx_idc:usdtwd'), { ticker: 'FX_IDC:USDTWD', markets: ['fx'] });
+  assert.equal(forexYahooTicker('USDTWD'), 'USDTWD=X');
+  assert.equal(showsExchange('FX:USDTWD'), false);
+  assert.equal(priceDigits('FX:USDTWD'), 4);
+  assert.equal(priceDigits('SGX:TWD1!'), 4);
+  assert.equal(priceDigits('NASDAQ:AAPL'), 2);
+});
+
+test('marketOf gives listed FX futures their exchange market, only for the continuous contract', () => {
+  assert.equal(marketOf('CME:6E1!'), 'cme');
+  assert.equal(marketOf('CME:6J1!'), 'cme');
+  assert.equal(marketOf('SGX:TWD1!'), 'sgx');
+  for (const id of ['CME:6E2!', 'CME:6EZ2026', 'CME:ES1!', 'SGX:TW1!', 'CME:TWD1!']) assert.equal(marketOf(id), null, id);
+  assert.equal(futuresRoot('TWD1!'), 'TWD');
+  assert.equal(futuresRoot('TWDZ2026'), null);
+  assert.equal(cmeYahooTicker('6E1!'), '6E=F');
+  assert.equal(futuresName('SGX:TWD1!'), 'TWD/USD (Full-Sized) FX Futures');
+  assert.deepEqual(parseInput('sgx:twd1!'), { ticker: 'SGX:TWD1!', markets: ['sgx'] });
+  assert.deepEqual(parseInput('CME:6E1!'), { ticker: 'CME:6E1!', markets: ['cme'] });
 });
 
 test('marketOf puts a listed index first, also on a stock exchange', () => {

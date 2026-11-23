@@ -55,7 +55,7 @@ import {
   tabsChanged,
 } from './lib/store.js';
 import { hasConsent, needsConsentDecision, setConsent } from './lib/sharing.js';
-import { chartUrl, EXCHANGE_MARKETS, isChartUrl, isCryptoMarket, marketOf, showsExchange, tickerOf } from './lib/symbols.js';
+import { chartUrl, EXCHANGE_MARKETS, isChartUrl, isCryptoMarket, marketOf, priceDigits, showsExchange, tickerOf } from './lib/symbols.js';
 import { contrast, hexToHsv, hsvToHex, parseHex, presetOf, PRESETS, THEME_KEY, themeColors, validTheme } from './lib/theme.js';
 import { LIST_LOCK, writeDiff } from './lib/sync.js';
 import { isSignedOut, parseSearch, watchlistsToTabs } from './lib/tradingview.js';
@@ -798,9 +798,10 @@ const SESSION_LABELS = { pre: 'session.pre', post: 'session.post' };
 
 // Fills the cells of the shown columns. prefix is '' for the main line and 'ext-' for the line below.
 function paintCells(row, prefix, quote) {
+  const digits = priceDigits(row.dataset.symbol);
   const texts = {
-    price: formatPrice(quote?.price),
-    change: formatChange(quote?.change, quote?.price),
+    price: formatPrice(quote?.price, digits),
+    change: formatChange(quote?.change, quote?.price, digits),
     percent: formatPercent(quote?.changePercent),
   };
   const direction = directionOf(quote?.change ?? 0);
