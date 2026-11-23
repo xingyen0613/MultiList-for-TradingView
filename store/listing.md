@@ -2,6 +2,8 @@
 
 Draft text for the Developer Dashboard. Field names follow the dashboard tabs. Check each field against the dashboard before submitting: the dashboard can change its field names.
 
+The descriptions below include Japanese stocks, forex and FX futures. The 0.4.0 package does not have them. To resubmit 0.4.0, use the descriptions at commit 38e949c.
+
 ## Store listing
 
 The store has two languages: `zh_TW` (Traditional Chinese) and `en` (English). The manifest gives the name and summary for each language from `extension/_locales/<lang>/messages.json`. In the dashboard, fill a detailed description and screenshots for each language.
@@ -46,7 +48,7 @@ Rules for the descriptions (Chrome Web Store keyword spam policy and spam FAQ):
 • 一鍵切換圖表：頁面不重新載入，未儲存的變更會保留。
 • 用代碼或公司名稱搜尋，中文、英文都可以，例如「台積電」或「Apple」。
 • 一鍵匯入現有的觀察清單：每個清單變成一個分頁，每個區段變成一個分組。
-• 報價：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、常用指數（例如 VIX），以及 7 家加密貨幣交易所的最新價、漲跌、漲跌幅。
+• 報價：台股（上市、上櫃）、美股、歐股、韓股（KOSPI、KOSDAQ）、日股、常用指數（例如 VIX）、外匯、外匯期貨，以及 7 家加密貨幣交易所的最新價、漲跌、漲跌幅。
 • 美股盤前、盤後：在這兩個時段，美股那一列下方多一行，顯示盤前或盤後的價格與漲跌。
 • 自選欄位：最新價、漲跌、漲跌幅可以各自顯示或隱藏，美股盤前盤後那一行也可以關掉。
 • 用分頁整理，拖曳就能調整順序。
@@ -81,7 +83,7 @@ Features
 • Click to switch the chart. The page does not reload, so unsaved changes stay.
 • Search by ticker or company name, in English or Chinese.
 • Import your existing watchlists in one click: each list becomes a tab, and each section becomes a group.
-• Last price, change and change % for Taiwan, US, European and Korean stocks (KOSPI, KOSDAQ), common indices such as VIX, and crypto from 7 exchanges.
+• Last price, change and change % for Taiwan, US, European, Korean (KOSPI, KOSDAQ) and Japanese stocks, common indices such as VIX, forex, FX futures, and crypto from 7 exchanges.
 • US pre-market and after-hours prices. During those sessions, a second line under each US stock shows the price and change.
 • Choose your columns. Show or hide last price, change and change %, and turn the pre-market and after-hours line on or off.
 • Organize groups in tabs, and drag to reorder.
